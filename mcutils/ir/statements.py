@@ -4,12 +4,13 @@ import ast
 import dataclasses
 import typing
 
+from .. import stores
 from ..errors import CompilationError, compile_assert
 
 
 @dataclasses.dataclass
 class Namespace:
-    functions: dict[tuple[str, ...], Function]
+    symbols: dict[tuple[str, ...], Function | stores.ReadableStore]
 
     @classmethod
     def from_py_ast(cls, node: ast.Module):
@@ -36,6 +37,12 @@ def statement_factory(node: ast.stmt) -> Statement:
         return IfStatement.from_py_ast(node)
     elif isinstance(node, (ast.Assign, ast.AnnAssign)):
         return AssignmentStatement.from_py_ast(node)
+    elif isinstance(node, ast.Return):
+        return ReturnStatement(expression_factory(node.value))
+    elif isinstance(node, ast.Continue):
+        return ContinueStatement()
+    elif isinstance(node, ast.Break):
+        return BreakStatement()
     else:
         raise CompilationError(f"Invalid statement {node!r}")
 
@@ -55,14 +62,50 @@ def expression_factory(node: ast.expr) -> Expression:
         raise CompilationError(f"Invalid expression {node!r}")
 
 
+def annotation_to_datatype(ann: ast.expr) -> VariableType:
+    match ann:
+        case ast.Name(id="Score"):
+            return ScoreType()
+        case ast.Name(id="LocalScope"):
+            return LocalScopeType(stores.AnyDataType)
+        case ast.Name(id="Nbt"):
+            return NbtType(stores.AnyDataType)
+        case ast.Subscript(value=ast.Name(id="Nbt"), slice=ast.Name(id=type_str)):
+            return NbtType(getattr(stores, type_str))
+        case ast.Subscript(value=ast.Name(id="LocalScope"), slice=ast.Name(id=type_str)):
+            return LocalScopeType(getattr(stores, type_str))
+
+    raise CompilationError(f"Invalid annotation {ann!r}")
+
+
+class VariableType:
+    ...
+
+
+class ScoreType(VariableType):
+    ...
+
+
+@dataclasses.dataclass
+class NbtType(VariableType):
+    dtype: typing.Type[stores.DataType]
+
+
+@dataclasses.dataclass
+class LocalScopeType(VariableType):
+    dtype: typing.Type[stores.DataType]
+
+
 @dataclasses.dataclass
 class Function:
     statements: list[Statement]
+    args: dict[str, VariableType]
 
     @classmethod
     def from_py_ast(cls, node: ast.FunctionDef):
         return cls(
-            [statement_factory(stmt) for stmt in node.body]
+            [statement_factory(stmt) for stmt in node.body],
+            {arg.arg: annotation_to_datatype(arg.annotation) for arg in node.args.args}
         )
 
 
@@ -182,6 +225,23 @@ class WhileLoopStatement(Statement):
     body: list[Statement]
 
 
+class StoppingStatement(Statement):
+    ...
+
+
+class ContinueStatement(StoppingStatement):
+    ...
+
+
+class BreakStatement(StoppingStatement):
+    ...
+
+
+@dataclasses.dataclass
+class ReturnStatement(StoppingStatement):
+    value: Expression
+
+
 @dataclasses.dataclass
 class IfStatement(Statement):
     condition: Expression
@@ -200,19 +260,23 @@ class IfStatement(Statement):
 @dataclasses.dataclass
 class AssignmentStatement(Statement):
     target: str
+    target_type: VariableType | None
     value: Expression
 
     @classmethod
     def from_py_ast(cls, node: ast.Assign | ast.AnnAssign):
         if isinstance(node, ast.AnnAssign):
             target = node.target
+            ann = annotation_to_datatype(node.annotation)
         else:
             compile_assert(len(node.targets) == 1, f"Invalid assignment target {node.targets!r}")
             target = node.targets[0]
+            ann = None
 
         compile_assert(isinstance(target, ast.Name), f"Invalid assignment.")
 
         return cls(
             target.id,
+            ann,
             expression_factory(node.value)
         )

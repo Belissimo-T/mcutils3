@@ -1,5 +1,5 @@
 def fizz_buzz():
-    i = 1
+    i: Nbt[IntType] = 1
     while i <= 100:
         div_3 = i % 3 == 0
         div_5 = i % 5 == 0
@@ -12,3 +12,10 @@ def fizz_buzz():
             print("Buzz")
 
         i = i + 1
+
+
+def fib(n: Score):
+    if n <= 1:
+        return 1
+
+    return fib(n - 1) + fib(n - 2)
