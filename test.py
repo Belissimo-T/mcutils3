@@ -1,7 +1,7 @@
 import ast
 import pathlib
 
-from mcutils.ir import tree, blocks, blocks_transform
+from mcutils.ir import tree, blocks, blocks_transform, commands
 
 
 def main():
@@ -9,6 +9,8 @@ def main():
     b = blocks.Namespace2.from_tree_namespace(a)
     for func in b.functions.values():
         func.blocks = blocks_transform.transform_all(func.blocks)
+
+    c = commands.Namespace3.from_namespace2(b)
     breakpoint()
 
 

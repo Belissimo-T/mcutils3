@@ -1,6 +1,7 @@
 import copy
 
-from . import blocks
+from . import blocks, tree
+from ..errors import compile_assert
 
 
 def transform_whiles(mcfunctions: dict[tuple[str, ...], blocks.Block]) -> dict[tuple[str, ...], blocks.Block]:
@@ -15,7 +16,7 @@ def transform_whiles(mcfunctions: dict[tuple[str, ...], blocks.Block]) -> dict[t
         for statement in mcfunction.statements:
             if isinstance(statement, blocks.WhileStatement):
                 current_child.continuation_info = mcfunction.continuation_info.with_(
-                    default=(*mcfunction_name, "while_check_condition")
+                    default=(*mcfunction_name, "__while_chk_cond")
                 )
 
                 mcfunction_children |= {
@@ -25,10 +26,10 @@ def transform_whiles(mcfunctions: dict[tuple[str, ...], blocks.Block]) -> dict[t
                 current_child = blocks.Block([], mcfunction.continuation_info)
 
                 in_loop_continuation_info = mcfunction.continuation_info.with_(
-                    default=(*mcfunction_name, "while_check_condition"),
+                    default=(*mcfunction_name, "__while_chk_cond"),
                     new_loops=[
                         blocks.LoopContinuationInfo(
-                            continue_=(*mcfunction_name, "while_check_condition"),
+                            continue_=(*mcfunction_name, "__while_chk_cond"),
                             break_=(*mcfunction_name, f"{current_child_i}")
                         )
                     ]
@@ -36,14 +37,13 @@ def transform_whiles(mcfunctions: dict[tuple[str, ...], blocks.Block]) -> dict[t
 
                 mcfunctions[statement.body].continuation_info = in_loop_continuation_info
                 mcfunction_children.update({
-                    ("while", ): mcfunctions[statement.body],
-                    ("while_check_condition", ): blocks.Block(
+                    ("__while_chk_cond",): blocks.Block(
                         # although break/continue in the loop condition check is a bit weird
                         continuation_info=in_loop_continuation_info,
                         statements=[
                             blocks.IfStatement(
                                 condition=statement.condition,
-                                true_block=(*mcfunction_name, "while"),
+                                true_block=statement.body,
                                 false_block=in_loop_continuation_info.loops[-1].break_
                             )
                         ]
@@ -53,12 +53,12 @@ def transform_whiles(mcfunctions: dict[tuple[str, ...], blocks.Block]) -> dict[t
                 current_child.statements.append(statement)
 
         mcfunction_children |= {
-            (f"{current_child_i}", ): current_child
+            (f"{current_child_i}",): current_child
         }
 
         new_mcfunctions |= {(*mcfunction_name, *key): value for key, value in mcfunction_children.items()
-                            if key != ("0", )}
-        new_mcfunctions |= {mcfunction_name: mcfunction_children["0", ]}
+                            if key != ("0",)}
+        new_mcfunctions |= {mcfunction_name: mcfunction_children["0",]}
 
     return new_mcfunctions
 
@@ -80,7 +80,7 @@ def transform_conditionals(mcfunctions: dict[tuple[str, ...], blocks.Block]) -> 
 
             if isinstance(node, blocks.IfStatement):
                 mcfunction_children |= {
-                    (f"{current_child_i}", ): current_child
+                    (f"{current_child_i}",): current_child
                 }
                 current_child_i += 1
                 current_child.continuation_info.default = None  # this mcfunction ends here
@@ -94,23 +94,50 @@ def transform_conditionals(mcfunctions: dict[tuple[str, ...], blocks.Block]) -> 
                 current_child = blocks.Block([], mcfunction.continuation_info)
 
         mcfunction_children |= {
-            (f"{current_child_i}", ): current_child
+            (f"{current_child_i}",): current_child
         }
         new_mcfunctions |= {(*mcfunction_name, *key): value for key, value in mcfunction_children.items()
-                            if key != ("0", )}
-        new_mcfunctions |= {mcfunction_name: mcfunction_children["0", ]}
+                            if key != ("0",)}
+        new_mcfunctions |= {mcfunction_name: mcfunction_children["0",]}
 
     return new_mcfunctions
 
 
+def remove_stopping_statements(mcfunctions: dict[tuple[str, ...], blocks.Block]) -> dict[tuple[str, ...], blocks.Block]:
+    out = {}
+
+    for mcfunction_name, mcfunction in mcfunctions.items():
+        statements = []
+        for statement in mcfunction.statements:
+            if isinstance(statement, tree.StoppingStatement):
+                if isinstance(statement, tree.ContinueStatement):
+                    statements.append(blocks.BlockCallStatement(mcfunction.continuation_info.loops[0].continue_))
+                elif isinstance(statement, tree.BreakStatement):
+                    statements.append(blocks.BlockCallStatement(mcfunction.continuation_info.loops[0].break_))
+                elif isinstance(statement, tree.ReturnStatement):
+                    statements.append(statement)
+                    statements.append(blocks.BlockCallStatement(mcfunction.continuation_info.return_))
+                elif isinstance(statement, blocks.IfStatement):
+                    statements.append(statement)
+                else:
+                    compile_assert(False)
+
+                break
+            else:
+                statements.append(statement)
+        else:
+            statements.append(blocks.BlockCallStatement(mcfunction.continuation_info.default))
+
+        out[mcfunction_name] = blocks.Block(statements, mcfunction.continuation_info)
+
+    return out
+
+
 def transform_all(sequences: dict[tuple[str, ...], blocks.Block]) -> dict[tuple[str, ...], blocks.Block]:
-    # transform whiles
     sequences = transform_whiles(sequences)
 
-    # transform ifs
     sequences = transform_conditionals(sequences)
 
-    # remove stopping statements
-    # sequences = remove_stopping_statements(sequences)
+    sequences = remove_stopping_statements(sequences)
 
     return sequences

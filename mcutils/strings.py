@@ -23,17 +23,22 @@ class StringResolver:
             return val
 
 
-@dataclasses.dataclass(frozen=True)
 class String(abc.ABC):
     @abc.abstractmethod
     def get_str(self, existing_strings: set[str], resolve_string: typing.Callable[[String], str]) -> str:
         ...
 
+    def __hash__(self):
+        return hash(self.__class__) ^ hash(self.__dict__)
 
-@dataclasses.dataclass(frozen=True)
+    def __eq__(self, other):
+        return id(self) == id(other)
+
+
 class LiteralString(String):
-    literal: str
-    args: tuple[String, ...] = ()
+    def __init__(self, literal: str, *args: String | str):
+        self.literal = literal
+        self.args = args
 
     def get_str(self, existing_strings: set[str], resolve_string: typing.Callable[[String], str]) -> str:
         format_args = tuple(map(resolve_string, self.args))
@@ -42,11 +47,6 @@ class LiteralString(String):
             return self.literal % format_args
         except TypeError as e:
             raise CompilationError(f"Command {self.literal!r} has {len(self.args)} args.") from e
-
-
-class CurrentLocationString(String):
-    def get_str(self, existing_strings: set[str], resolve_string: typing.Callable[[String], str]) -> str:
-        return "current-location-string-todo"  # TODO
 
 
 @dataclasses.dataclass(frozen=True)
@@ -66,8 +66,9 @@ class UniqueString(String, abc.ABC):
                 return new_val
 
 
+@dataclasses.dataclass(frozen=True)
 class RestrictedUniqueIdentifier(UniqueString):
-    string = LiteralString("%s", (CurrentLocationString(),))
+    string: String
     # pattern = re.compile(r"^[a-zA-Z0-9_+\-.]+$")
 
 
@@ -78,3 +79,11 @@ class UniqueScoreboardObjective(UniqueString): pass
 
 
 class UniqueScoreboardPlayer(UniqueString): pass
+
+
+@dataclasses.dataclass(frozen=True)
+class Comment(String):
+    comment: str
+
+    def get_str(self, existing_strings: set[str], resolve_string: typing.Callable[[String], str]) -> str:
+        return f"# {self.comment}"

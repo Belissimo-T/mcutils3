@@ -22,7 +22,7 @@ class Namespace2:
 class Function2:
     blocks: dict[tuple[str, ...], Block]
     args: dict[str, tree.VariableType]
-    entry_point: tuple[str, ...] = "entry",
+    entry_point: tuple[str, ...] = ()
 
     @staticmethod
     def _find_free(container, base: tuple[str, ...], name: str):
@@ -34,7 +34,8 @@ class Function2:
         return base + (new_name,)
 
     @classmethod
-    def process_block(cls, statements: list[tree.Statement], continuation_info: ContinuationInfo, blocks: dict[tuple[str, ...], Block],
+    def process_block(cls, statements: list[tree.Statement], continuation_info: ContinuationInfo,
+                      blocks: dict[tuple[str, ...], Block],
                       path: tuple[str, ...] = ()):
         b = Block([], continuation_info)
         blocks[path] = b
@@ -70,10 +71,11 @@ class Function2:
     @classmethod
     def from_tree_function(cls, func: tree.Function) -> Function2:
         out = cls(
-            {("__return", ): Block([], ContinuationInfo(return_=None))},
+            {("__return",): Block([], ContinuationInfo(return_=None))},
             func.args
         )
-        cls.process_block(statements=func.statements, blocks=out.blocks, continuation_info=ContinuationInfo(return_=("__return", )))
+        cls.process_block(statements=func.statements, blocks=out.blocks,
+                          continuation_info=ContinuationInfo(return_=("__return",)))
         return out
 
 
@@ -83,7 +85,8 @@ class ContinuationInfo:
     default: tuple[str, ...] | None = None
     loops: list[LoopContinuationInfo] = dataclasses.field(default_factory=list)
 
-    def with_(self, default: tuple[str, ...] | None = None, new_loops: list[LoopContinuationInfo] = None) -> typing.Self:
+    def with_(self, default: tuple[str, ...] | None = None,
+              new_loops: list[LoopContinuationInfo] = None) -> typing.Self:
         # noinspection PyArgumentList
         return self.__class__(
             default=self.default if default is None else default,
@@ -104,23 +107,19 @@ class Block:
     continuation_info: ContinuationInfo
 
 
-class BlockControlFlowStatement(tree.Statement):
-    ...
-
-
 @dataclasses.dataclass
-class IfStatement(BlockControlFlowStatement):
+class IfStatement(tree.StoppingStatement):
     condition: tree.Expression
     true_block: tuple[str, ...]
     false_block: tuple[str, ...]
 
 
 @dataclasses.dataclass
-class WhileStatement(BlockControlFlowStatement):
+class WhileStatement(tree.Statement):
     condition: tree.Expression
     body: tuple[str, ...]
 
 
 @dataclasses.dataclass
-class BlockCallStatement(tree.Statement):
+class BlockCallStatement(tree.StoppingStatement):
     block: tuple[str, ...]

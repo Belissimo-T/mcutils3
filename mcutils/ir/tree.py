@@ -188,15 +188,25 @@ class BinOpExpression(Expression):
 
 @dataclasses.dataclass
 class FunctionCallExpression(Expression):
-    function: tuple[str, ...]
+    function: str
     args: list[Expression]
+    compile_time_args: typing.Any
 
     @classmethod
     def from_py_ast(cls, node: ast.Call):
-        compile_assert(isinstance(node.func, ast.Name), f"Invalid function call {node.func!r}")
+        if isinstance(node.func, ast.Subscript):
+            compile_time_args = node.func.slice
+
+            name = node.func.value
+        else:
+            compile_time_args = None
+            name = node.func
+
+        compile_assert(isinstance(name, ast.Name), f"Invalid function call {node.func!r}")
         return cls(
-            (node.func.id,),
-            [expression_factory(arg) for arg in node.args]
+            function=name.id,
+            args=[expression_factory(arg) for arg in node.args],
+            compile_time_args=compile_time_args
         )
 
 

@@ -1,6 +1,7 @@
 import abc
 import typing
 
+from . import strings
 from .errors import CompilationError
 from .generics import Generic
 
@@ -126,7 +127,7 @@ class ConstInt(ConstStore[WholeNumberType]):
 
 
 class ScoreboardStore(WritableStore[WholeNumberType]):
-    def __init__(self, player: "str | UniqueString", objective: "str | UniqueString"):
+    def __init__(self, player: str | strings.String, objective: str | strings.String):
         self.player = player
         self.objective = objective
 
@@ -146,7 +147,7 @@ class NbtStore(WritableStore):
 
     def __init__(self,
                  nbt_container_type: _nbt_container_type_literal,
-                 nbt_container_argument: "str | UniqueString",
+                 nbt_container_argument: str | strings.String,
                  path: str = ""):
         self.nbt_container_type = nbt_container_type
         self.nbt_container_argument = nbt_container_argument
