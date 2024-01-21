@@ -1,5 +1,6 @@
 def fizz_buzz():
     i: Nbt[IntType] = 1
+
     while i <= 100:
         div_3 = i % 3 == 0
         div_5 = i % 5 == 0

@@ -1,10 +1,14 @@
+import ast
 import pathlib
 
-from mcutils.ir.statements import *
+from mcutils.ir import tree, blocks, blocks_transform
 
 
 def main():
-    a = Namespace.from_py_ast(ast.parse(pathlib.Path("testprog/simple.py").read_text()))
+    a = tree.Namespace.from_py_ast(ast.parse(pathlib.Path("testprog/simple.py").read_text()))
+    b = blocks.Namespace2.from_tree_namespace(a)
+    for func in b.functions.values():
+        func.blocks = blocks_transform.transform_all(func.blocks)
     breakpoint()
 
 

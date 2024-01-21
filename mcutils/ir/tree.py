@@ -10,7 +10,7 @@ from ..errors import CompilationError, compile_assert
 
 @dataclasses.dataclass
 class Namespace:
-    symbols: dict[tuple[str, ...], Function | stores.ReadableStore]
+    symbols: dict[tuple[str, ...], Function]
 
     @classmethod
     def from_py_ast(cls, node: ast.Module):
@@ -203,6 +203,7 @@ class FunctionCallExpression(Expression):
 @dataclasses.dataclass
 class ConstantExpression(Expression):
     value: str | int | float
+    # stores.ConstStore?
 
 
 @dataclasses.dataclass
@@ -219,8 +220,12 @@ class ExpressionStatement(Statement):
     expression: Expression
 
 
+
+class NestedStatement(Statement):
+    ...
+
 @dataclasses.dataclass
-class WhileLoopStatement(Statement):
+class WhileLoopStatement(NestedStatement):
     condition: Expression
     body: list[Statement]
 
@@ -243,7 +248,7 @@ class ReturnStatement(StoppingStatement):
 
 
 @dataclasses.dataclass
-class IfStatement(Statement):
+class IfStatement(NestedStatement):
     condition: Expression
     true_body: list[Statement]
     false_body: list[Statement]
