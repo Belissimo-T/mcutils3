@@ -4,7 +4,7 @@ import ast
 import dataclasses
 import typing
 
-from .. import stores
+from ..data import stores
 from ..errors import CompilationError, compile_assert
 
 
@@ -230,9 +230,9 @@ class ExpressionStatement(Statement):
     expression: Expression
 
 
-
 class NestedStatement(Statement):
     ...
+
 
 @dataclasses.dataclass
 class WhileLoopStatement(NestedStatement):

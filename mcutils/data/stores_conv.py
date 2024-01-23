@@ -1,6 +1,6 @@
-from .errors import issue_warning
 from .stores import *
-from .strings import *
+from ..errors import issue_warning
+from ..strings import *
 
 """
 # Conversions:
@@ -208,18 +208,6 @@ def expr_to_nbt(src: ReadableStore, dst: NbtStore, scale: float = 1) -> list[Str
 
 
 def var_to_var(src: ReadableStore, dst: WritableStore, scale: float = 1) -> list[String]:
-    # if isinstance(src, DerivedVar):
-    #     if isinstance(dst, (NbtStore, ScoreboardStore)):
-    #         return [
-    #             *src.to_primitive_var(dst)
-    #         ]
-    #
-    # if isinstance(dst, DerivedVar):
-    #     if isinstance(src, (NbtStore, ScoreboardStore)):
-    #         return [
-    #             *dst.from_primitive_var(src)
-    #         ]
-
     if isinstance(dst, ScoreboardStore):
         return expr_to_score(src, dst, scale)
 

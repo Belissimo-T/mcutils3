@@ -1,13 +1,18 @@
 import ast
 
+from .. import strings
 from ..ir import commands
 
 
-def std_print(node: ast.expr) -> commands.McFunction:
+def std_print(node: ast.expr) -> list[strings.String]:
     breakpoint()
 
-    func = commands.McFunction([
-            ...
-    ])
+    return [
+        ...,
+    ]
 
-    return func
+
+def log(logger: str, *messsage) -> list[strings.String]:
+    return [
+        strings.LiteralString("say hi! logging!")
+    ]

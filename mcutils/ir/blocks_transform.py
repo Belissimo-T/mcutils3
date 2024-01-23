@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import copy
 
 from . import blocks, tree
@@ -128,6 +130,8 @@ def remove_stopping_statements(mcfunctions: dict[tuple[str, ...], blocks.Block])
         else:
             statements.append(blocks.BlockCallStatement(mcfunction.continuation_info.default))
 
+        statements = [s for s in statements if not (isinstance(s, blocks.BlockCallStatement) and s.block is None)]
+
         out[mcfunction_name] = blocks.Block(statements, mcfunction.continuation_info)
 
     return out
@@ -139,5 +143,7 @@ def transform_all(sequences: dict[tuple[str, ...], blocks.Block]) -> dict[tuple[
     sequences = transform_conditionals(sequences)
 
     sequences = remove_stopping_statements(sequences)
+
+    sequences = replace_ifs(sequences)
 
     return sequences

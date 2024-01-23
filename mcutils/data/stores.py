@@ -1,9 +1,9 @@
 import abc
 import typing
 
-from . import strings
-from .errors import CompilationError
-from .generics import Generic
+from .. import strings
+from ..errors import CompilationError
+from ..runtime_generics import Generic
 
 
 class DataType:
@@ -111,6 +111,10 @@ class WritableStore(ReadableStore):
     """Represents something that stores some sort of data somewhere."""
 
 
+class PrimitiveStore(WritableStore):
+    pass
+
+
 class ConstStore(ReadableStore):
     """An expression that holds a compile-time constant."""
 
@@ -126,7 +130,7 @@ class ConstInt(ConstStore[WholeNumberType]):
         super().__init__(str(value))
 
 
-class ScoreboardStore(WritableStore[WholeNumberType]):
+class ScoreboardStore(PrimitiveStore[WholeNumberType]):
     def __init__(self, player: str | strings.String, objective: str | strings.String):
         self.player = player
         self.objective = objective
@@ -142,7 +146,7 @@ class ScoreboardStore(WritableStore[WholeNumberType]):
         yield self.objective
 
 
-class NbtStore(WritableStore):
+class NbtStore(PrimitiveStore):
     _nbt_container_type_literal = typing.Literal["block", "entity", "storage"]
 
     def __init__(self,

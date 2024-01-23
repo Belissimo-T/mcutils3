@@ -29,7 +29,7 @@ class String(abc.ABC):
         ...
 
     def __hash__(self):
-        return hash(self.__class__) ^ hash(self.__dict__)
+        return hash(id(self))
 
     def __eq__(self, other):
         return id(self) == id(other)
