@@ -188,7 +188,7 @@ class BinOpExpression(Expression):
 
 @dataclasses.dataclass
 class FunctionCallExpression(Expression):
-    function: str
+    function: tuple[str, ...]
     args: list[Expression]
     compile_time_args: typing.Any
 
@@ -204,7 +204,7 @@ class FunctionCallExpression(Expression):
 
         compile_assert(isinstance(name, ast.Name), f"Invalid function call {node.func!r}")
         return cls(
-            function=name.id,
+            function=(name.id, ),
             args=[expression_factory(arg) for arg in node.args],
             compile_time_args=compile_time_args
         )

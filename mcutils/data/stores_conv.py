@@ -197,7 +197,7 @@ def expr_to_nbt(src: ReadableStore, dst: NbtStore, scale: float = 1) -> list[Str
 
     if isinstance(src, ScoreboardStore):
         if not dst.is_data_type(ConcreteDataType):
-            raise CompilationError(f"Destination {dst!r} is not a concrete datatype.")
+            dst = NbtStore[IntType](dst.nbt_container_type, dst.nbt_container_argument, dst.path)
 
         return [score_to_nbt(src, dst, scale)]
 

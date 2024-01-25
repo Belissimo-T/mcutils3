@@ -1,4 +1,5 @@
 import dataclasses
+import typing
 
 from . import blocks
 from ..data import stores, expressions
@@ -16,6 +17,13 @@ class IfStatement(tree.StoppingStatement):
     condition: stores.ReadableStore
     true_block: tuple[str, ...]
     false_block: tuple[str, ...]
+
+
+@dataclasses.dataclass
+class ConditionalBlockCallStatement(tree.Statement):
+    condition: stores.ScoreboardStore
+    true_block: tuple[str, ...]
+    unless: bool = False
 
 
 @dataclasses.dataclass
@@ -39,13 +47,16 @@ class StackPopStatement(tree.Statement):
     dst: stores.WritableStore
 
 
-def transform_expr(expr: tree.Expression,
-                   symbols: dict[str, stores.ReadableStore | stores.WritableStore]) -> stores.ReadableStore:
+def transform_expr(
+    expr: tree.Expression,
+    symbols: dict[str, stores.ReadableStore | stores.WritableStore]
+) -> stores.ReadableStore:
     match expr:
         case tree.SymbolExpression(name):
             return symbols[name]
         case tree.ConstantExpression(value):
-            return stores.ConstStore(value)
+            compile_assert(type(value) is int)
+            return stores.ConstInt(value)
         case tree.FunctionCallExpression(function=function, args=args, compile_time_args=compile_time_args):
             return expressions.FunctionCallExpression(
                 function=function,
@@ -62,9 +73,10 @@ def transform_expr(expr: tree.Expression,
             compile_assert(False)
 
 
-def transform_exprs_in_stmts(stmts: list[tree.Statement],
-                             symbols: dict[str, stores.ReadableStore | stores.WritableStore]
-                             ) -> list[tree.Statement]:
+def transform_exprs_in_stmts(
+    stmts: list[tree.Statement],
+    symbols: dict[str, stores.ReadableStore | stores.WritableStore]
+) -> list[tree.Statement]:
     out = []
     for stmt in stmts:
         match stmt:

@@ -36,7 +36,8 @@ class Datapack:
                 for mcfunc_name, mcfunc in func.mcfunctions.items():
                     commands = list(map(string_resolver.resolve_identifier, mcfunc.commands))
 
+                    # noinspection PyTypeChecker
                     out[mcfunc.location.to_str()] = beet.Function("\n".join(commands), tags=[])
 
-        out.save()
+        out.save(overwrite=True)
         return out

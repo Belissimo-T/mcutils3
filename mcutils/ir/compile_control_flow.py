@@ -144,6 +144,4 @@ def transform_all(sequences: dict[tuple[str, ...], blocks.Block]) -> dict[tuple[
 
     sequences = remove_stopping_statements(sequences)
 
-    sequences = replace_ifs(sequences)
-
     return sequences

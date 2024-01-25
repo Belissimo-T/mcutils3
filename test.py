@@ -1,7 +1,7 @@
 import ast
 import pathlib
 
-from mcutils.ir import tree, blocks, blocks_transform, commands, datapack
+from mcutils.ir import tree, blocks, compile_control_flow, commands, datapack
 
 
 def main():

@@ -3,9 +3,9 @@ from __future__ import annotations
 import dataclasses
 import typing
 
-from . import tree, blocks_expr, blocks_transform
+from . import tree, blocks_expr, compile_control_flow
 from .. import strings
-from ..data import stores
+from ..data import stores, expressions
 from ..errors import CompilationError, compile_assert
 
 
@@ -22,6 +22,7 @@ class Namespace2:
 
 
 _IF_TEMP = stores.ScoreboardStore(strings.UniqueScoreboardPlayer(strings.LiteralString("conditional")), "__mcutils__")
+
 
 @dataclasses.dataclass
 class Function2:
@@ -87,29 +88,39 @@ class Function2:
 
         out.symbols = cls.get_symbols(out.blocks.values(), out.args)
 
-        out.blocks = blocks_transform.transform_all(out.blocks)
+        out.blocks = compile_control_flow.transform_all(out.blocks)
 
         for block in out.blocks.values():
             block.statements = blocks_expr.transform_exprs_in_stmts(block.statements, out.symbols)
 
-        # for block in out.blocks.values():
-        #     s = []
-        #     for statement in block.statements:
-        #         match statement:
-        #             case blocks_expr.IfStatement(condition=condition, true_block=true_block, false_block=false_block):
-        #                 s += [
-        #                     blocks_expr.StackPushStatement(condition),
-        #                     blocks_expr.StackPopStatement(_IF_TEMP),
-        #                     LiteralStatement([
-        #                         strings.LiteralString(
-        #                             "execute unless score %s %s matches 0 run function %s",
-        #                             *_IF_TEMP,
-        #                         )
-        #                     ])
-        #
-        #                 ]
-        #             case _:
-        #                 s.append(statement)
+        for block in out.blocks.values():
+            new_statements = []
+            for statement in block.statements:
+                match statement:
+                    case blocks_expr.AssignmentStatement(src=src, dst=dst):
+                        new_statements += expressions.fetch(src, dst)
+                    case blocks_expr.ExpressionStatement(expression=expression):
+                        new_statements += expressions.fetch(expression, stores.NbtStore("storage", "mcutils", "null"))
+                    case blocks_expr.IfStatement(condition=condition, true_block=true_block, false_block=false_block):
+                        new_statements += [
+                            *expressions.fetch(condition, _IF_TEMP),
+                            blocks_expr.StackPushStatement(_IF_TEMP),
+                            blocks_expr.ConditionalBlockCallStatement(
+                                condition=_IF_TEMP,
+                                true_block=true_block,
+                                unless=False
+                            ),
+                            blocks_expr.StackPopStatement(_IF_TEMP),
+                            blocks_expr.ConditionalBlockCallStatement(
+                                condition=_IF_TEMP,
+                                true_block=false_block,
+                                unless=True
+                            )
+                        ]
+                    case _:
+                        new_statements.append(statement)
+
+            block.statements = new_statements
 
         return out
 
@@ -195,7 +206,7 @@ class BlockCallStatement(tree.StoppingStatement):
 
 @dataclasses.dataclass
 class FunctionCallStatement(tree.Statement):
-    function: str
+    function: tuple[str, ...]
     compile_time_args: typing.Any
 
 

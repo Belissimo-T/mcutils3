@@ -130,7 +130,7 @@ class ConstInt(ConstStore[WholeNumberType]):
         super().__init__(str(value))
 
 
-class ScoreboardStore(PrimitiveStore[WholeNumberType]):
+class ScoreboardStore(PrimitiveStore[IntType]):
     def __init__(self, player: str | strings.String, objective: str | strings.String):
         self.player = player
         self.objective = objective
@@ -165,3 +165,8 @@ class NbtStore(PrimitiveStore):
     def __repr__(self):
         return f"{self.__class__.__name__}[{self.dtype_name}]({self.nbt_container_type!r}, " \
                f"{self.nbt_container_argument!r}, {self.path!r})"
+
+    def with_dtype(self, dtype: typing.Type[DataType]) -> "NbtStore":
+        return self.__class__[dtype](
+            self.nbt_container_type, self.nbt_container_argument, self.path
+        )

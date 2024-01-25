@@ -8,7 +8,7 @@ STD_STACK_INDEX_OBJECTIVE = UniqueScoreboardObjective(LiteralString("index"))
 STD_STACK_VALUE_OBJECTIVE = UniqueScoreboardObjective(LiteralString("value"))
 STD_STACK_TAG = UniqueTag(LiteralString("stack"))
 std_stack_ret_tag = UniqueTag(LiteralString("temp"))
-STD_STACK_RET_SEL = LiteralString("@e[tag=%s]", std_stack_ret_tag)
+STD_STACK_RET_SEL = LiteralString("@e[tag=%s, limit=1]", std_stack_ret_tag)
 
 load_func = commands.McFunction([
     Comment("create the stack objective"),

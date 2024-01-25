@@ -41,7 +41,7 @@ class LiteralString(String):
         self.args = args
 
     def get_str(self, existing_strings: set[str], resolve_string: typing.Callable[[String], str]) -> str:
-        format_args = tuple(map(resolve_string, self.args))
+        format_args = tuple((arg if isinstance(arg, str) else resolve_string(arg)) for arg in self.args)
 
         try:
             return self.literal % format_args

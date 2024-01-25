@@ -9,9 +9,10 @@ from .. import strings
 from ..data import stores
 from ..errors import compile_assert
 from ..ir import commands, blocks, tree, blocks_expr
+from ..lib import std
 
 _ARG_PRIMITIVES: dict[int, stores.NbtStore[stores.AnyDataType]] = {}
-_FETCH_TEMP = stores.NbtStore("storage", "mcutils:expr_temp", "fetch")
+_FETCH_TEMP = stores.NbtStore[stores.AnyDataType]("storage", "mcutils:expr_temp", "fetch")
 
 
 def get_temp_var(i: int) -> stores.NbtStore[stores.AnyDataType]:
@@ -34,11 +35,13 @@ def fetch(
                 blocks_expr.StackPushStatement(_FETCH_TEMP),
             ]
 
-        temp_vars = tuple(get_temp_var(i) for i in range(len(src.args)))
+        temp_vars = tuple(get_temp_var(i).with_dtype(arg.dtype_obj) for i, arg in enumerate(src.args))
         for var in temp_vars:
             out.append(blocks_expr.StackPopStatement(var))
 
         out += src.fetch_to(tuple(temp_vars), dst)
+
+        return out
     else:
         return [blocks.LiteralStatement(stores_conv.var_to_var(src, dst))]
 
@@ -62,17 +65,38 @@ class BinOpExpression(Expression):
     op: typing.Literal["+", "-", "*", "/", "%", "==", "!=", "<", ">", "<=", ">=", "and", "or"]
     right: stores.ReadableStore
 
+    _TEMP1: typing.ClassVar = std.get_temp_var("expr_temp1")
+    _TEMP2: typing.ClassVar = std.get_temp_var("expr_temp2")
+
     @property
     def args(self):
         return self.left, self.right
 
     def fetch_to(self, args: tuple[stores.PrimitiveStore, ...], target: stores.PrimitiveStore) -> list[tree.Statement]:
         left, right = args
-        compile_assert(self.op == "+")
-        return [
-            blocks.LiteralStatement(stores_conv.add_in_place(left, right)),
-            blocks.LiteralStatement(stores_conv.var_to_var(left, target)),
-        ]
+        if self.op == "+":
+            return [
+                blocks.LiteralStatement(stores_conv.add_in_place(left, right)),
+                blocks.LiteralStatement(stores_conv.var_to_var(left, target)),
+            ]
+        elif self.op in ("<", "<=", ">", ">=", "=="):
+            if self.op == "==":
+                op = "="
+            else:
+                op = self.op
+            return [
+                blocks.LiteralStatement(stores_conv.var_to_var(left, self._TEMP1)),
+                blocks.LiteralStatement(stores_conv.var_to_var(right, self._TEMP2)),
+                blocks.LiteralStatement([
+                    strings.LiteralString(
+                        f"execute if score %s {op} %s run scoreboard players set %s 1",
+                        *self._TEMP1, *self._TEMP2, *self._TEMP1
+                    )
+                ]),
+                blocks.LiteralStatement(stores_conv.var_to_var(self._TEMP1, target)),
+            ]
+        else:
+            compile_assert(False)
 
     @property
     def dtype_obj(self) -> typing.Type[stores.DataType]:
@@ -81,7 +105,7 @@ class BinOpExpression(Expression):
 
 @dataclasses.dataclass
 class FunctionCallExpression(Expression):
-    function: str
+    function: tuple[str, ...]
     args: tuple[stores.ReadableStore, ...]
     compile_time_args: typing.Any
 
