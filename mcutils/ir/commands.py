@@ -9,7 +9,7 @@ from . import blocks, tree, blocks_expr
 from .. import strings
 from ..data import stores, stores_conv, expressions
 from ..errors import CompilationError, compile_assert
-from ..lib import std, tools
+from ..lib import std
 from ..location import Location
 
 
@@ -25,6 +25,9 @@ class Namespace3:
             functions[path] = Function3()
 
         for path, func in namespace.functions.items():
+            functions[path].preprocess(func)
+
+        for path, func in namespace.functions.items():
             functions[path].process(func, functions)
 
         return cls(functions)
@@ -37,8 +40,9 @@ class Function3:
     symbols: dict[str, stores.ReadableStore] = dataclasses.field(default_factory=dict)
 
     def process(self, func: blocks.Function2, functions: dict[tuple[str, ...], Function3]) -> Function3:
-        from ..lib import stack
-        mcfunctions = {path: McFunction([]) for path in func.blocks}
+        self.args = func.args
+        self.entry_point = func.entry_point
+        self.symbols = func.symbols
 
         for path, block in func.blocks.items():
             commands = []
@@ -60,7 +64,7 @@ class Function3:
                 match statement:
                     case blocks_expr.ConditionalBlockCallStatement(condition=condition, true_block=true_block,
                                                                    unless=unless):
-                        mcfunction = mcfunctions[true_block]
+                        mcfunction = self.mcfunctions[true_block]
                         commands.append(
                             strings.LiteralString(
                                 f"execute {'if' if unless else 'unless'} score %s %s matches 0 run function %s",
@@ -68,20 +72,16 @@ class Function3:
                         )
                         pass
                     case blocks.BlockCallStatement(block=mcfunction_path):
-                        mcfunction = mcfunctions[mcfunction_path]
+                        mcfunction = self.mcfunctions[mcfunction_path]
                         commands.append(
                             strings.LiteralString("function %s", LocationOfString(mcfunction))
                         )
-                    case blocks.FunctionCallStatement(function=function, compile_time_args=compile_time_args):
-                        if function == ("print", ):
-                            # TODO
-                            commands += []
-                        else:
-                            func = functions[function]
-                            mcfunction = func.mcfunctions[func.entry_point]
-                            commands.append(
-                                strings.LiteralString("function %s", LocationOfString(mcfunction))
-                            )
+                    case blocks.FunctionCallStatement(function=function):
+                        func = functions[function]
+                        mcfunction = func.mcfunctions[func.entry_point]
+                        commands.append(
+                            strings.LiteralString("function %s", LocationOfString(mcfunction))
+                        )
                     case mcutils.ir.tree.LiteralStatement(strings=strings_):
                         commands += strings_
                     case blocks_expr.ReturnStatement(value=value):
@@ -89,12 +89,12 @@ class Function3:
                     case _:
                         breakpoint()
 
-            mcfunctions[path].commands = commands
+            self.mcfunctions[path].commands = commands
+
+    def preprocess(self, func: blocks.Function2):
+        mcfunctions = {path: McFunction([]) for path in func.blocks}
 
         self.mcfunctions = mcfunctions
-        self.args = func.args
-        self.entry_point = func.entry_point
-        self.symbols = func.symbols
 
 
 @dataclasses.dataclass

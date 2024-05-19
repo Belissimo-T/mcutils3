@@ -16,8 +16,8 @@ class Namespace2:
     @classmethod
     def from_tree_namespace(cls, namespace: tree.File) -> Namespace2:
         return cls({
-            name: Function2.from_tree_function(func)
-            for name, func in namespace.function_templates.items()
+            name: Function2.from_tree_function(func, namespace.scope)
+            for name, func in namespace.functions.items()
         })
 
 
@@ -76,7 +76,7 @@ class Function2:
                 b.statements.append(statement)
 
     @classmethod
-    def from_tree_function(cls, func: tree.Function) -> Function2:
+    def from_tree_function(cls, func: tree.Function, scope: tree.Scope) -> Function2:
         out = cls(
             blocks={("__return",): Block([], ContinuationInfo(return_=None))},
             args=func.args,
@@ -86,7 +86,7 @@ class Function2:
         cls.process_block(statements=func.statements, blocks=out.blocks,
                           continuation_info=ContinuationInfo(return_=("__return",)))
 
-        out.symbols = cls.get_symbols(out.blocks.values(), out.args)
+        out.symbols = cls.get_symbols(out.blocks.values(), scope.variables | func.variables | out.args)
 
         out.blocks = compile_control_flow.transform_all(out.blocks)
 
@@ -205,6 +205,5 @@ class BlockCallStatement(tree.StoppingStatement):
 @dataclasses.dataclass
 class FunctionCallStatement(tree.Statement):
     function: tuple[str, ...]
-    compile_time_args: typing.Any
 
 

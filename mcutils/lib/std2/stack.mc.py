@@ -1,4 +1,5 @@
 STD_RET: Score["ret"]
+STD_ARG: Score["arg"]
 
 STD_STACK_OBJECTIVE: ScoreboardObjective["stack"]
 STD_STACK_INDEX_OBJECTIVE: ScoreboardObjective["index"]
@@ -45,7 +46,7 @@ def push[stack_nr: int]():
     "tag @e remove %s" % (STD_STACK_RET_TAG, )
 
     # summon the entity
-    'summon minecraft:marker 0 0 0 {Tags:["%s", "%s", "%s", "%s"]}' % (
+    'summon minecraft:marker 0 0 0 {Tags:["%s", "%s", "%s"]}' % (
         tag_of_stack_nr[stack_nr](),
         STD_STACK_TAG,
         STD_STACK_RET_TAG
@@ -58,16 +59,10 @@ def push[stack_nr: int]():
     )
 
     # set the stack index
-    "scoreboard players operation %s %s = %s %s" % (
-        STD_STACK_RET_SEL,
-
-        tag_of_stack_nr[stack_nr](),
-        STD_STACK_OBJECTIVE,
-    )
-
-    v: Score[STD_STACK_RET_SEL, STD_STACK_VALUE_OBJECTIVE]
+    entity_stack_index: Score[STD_STACK_RET_SEL, STD_STACK_INDEX_OBJECTIVE] = stack_length
 
     # set value
+    v: Score[STD_STACK_RET_SEL, STD_STACK_VALUE_OBJECTIVE]
     v = STD_ARG
 
 

@@ -57,11 +57,10 @@ def transform_expr(
         case tree.ConstantExpression(value):
             compile_assert(type(value) is int)
             return stores.ConstInt(value)
-        case tree.FunctionCallExpression(function=function, args=args, compile_time_args=compile_time_args):
+        case tree.FunctionCallExpression(function=function, args=args):
             return expressions.FunctionCallExpression(
                 function=function,
                 args=tuple(transform_expr(arg, symbols) for arg in args),
-                compile_time_args=compile_time_args
             )
         case tree.BinOpExpression(left=left, right=right, op=op):
             return expressions.BinOpExpression(

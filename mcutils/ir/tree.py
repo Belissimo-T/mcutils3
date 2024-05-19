@@ -39,6 +39,16 @@ class Scope:
                 raise CompilationError(f"Undefined {type_} {name!r}")
 
 
+def compile_time_args_to_str(args: tuple) -> str:
+    match args:
+        case [int(a)]:
+            return str(a)
+        case []:
+            return "no_compile_time_args"
+        case _:
+            breakpoint()
+
+
 @dataclasses.dataclass
 class File:
     function_templates: dict[str, FunctionTemplate]
@@ -87,15 +97,7 @@ class File:
             except KeyError:
                 raise CompilationError(f"Undefined function {func_name!r}")
 
-            match args:
-                case [int(a)]:
-                    args_str = str(a)
-                case []:
-                    args_str = "no_compile_time_args"
-                case _:
-                    breakpoint()
-
-            func_path = (func_name, args_str)
+            func_path = (func_name, compile_time_args_to_str(args))
 
             if func_path in self.functions:
                 continue
@@ -119,6 +121,8 @@ def statement_factory(node: ast.stmt, context: Scope) -> Statement:
                     parse_string(el, context) for el in elts
                 ])
             ])
+        case ast.Expr(value=ast.Constant(value=str(val))):
+            return LiteralStatement([strings.LiteralString(val)])
         case ast.Expr():
             return ExpressionStatement(expression_factory(node.value, context))
         # case ast.While(test=test, body=body):
@@ -141,18 +145,19 @@ def statement_factory(node: ast.stmt, context: Scope) -> Statement:
 
 
 def expression_factory(node: ast.expr, context: Scope) -> Expression:
-    if isinstance(node, ast.UnaryOp):
-        return UnaryOpExpression.from_py_ast(node)
-    elif isinstance(node, (ast.Compare, ast.BinOp, ast.BoolOp)):
-        return BinOpExpression.from_py_ast(node, context)
-    elif isinstance(node, ast.Call):
-        return FunctionCallExpression.from_py_ast(node, context)
-    elif isinstance(node, ast.Constant):
-        return ConstantExpression(node.value)
-    elif isinstance(node, ast.Name):
-        return SymbolExpression(node.id)
-    else:
-        raise CompilationError(f"Invalid expression {node!r}")
+    match node:
+        case ast.UnaryOp():
+            return UnaryOpExpression.from_py_ast(node)
+        case ast.Compare() | ast.BinOp() | ast.BoolOp():
+            return BinOpExpression.from_py_ast(node, context)
+        case ast.Call():
+            return FunctionCallExpression.from_py_ast(node, context)
+        case ast.Constant(value=value):
+            return ConstantExpression(value)
+        case ast.Name(id=id):
+            return SymbolExpression(id)
+        case _:
+            raise CompilationError(f"Invalid expression {node!r}")
 
 
 def annotation_to_datatype(ann: ast.expr, context: Scope) -> VariableType:
@@ -185,9 +190,9 @@ def parse_string(expr: ast.expr, context: Scope) -> strings.String:
         case ast.Call(func=ast.Subscript(value=ast.Name(id=func_name), slice=s), args=[], keywords=[]):
             match s:
                 case ast.Constant(value=val):
-                    context.get(func_name, "pyfunc")(val)
+                    return context.get(func_name, "pyfunc")(val)
                 case ast.Name(id=name):
-                    context.get(func_name, "pyfunc")(name)
+                    return context.get(func_name, "pyfunc")(name)
                 case _:
                     raise CompilationError(f"Invalid compile time args {s!r}.")
         case _:
@@ -224,6 +229,7 @@ class FunctionTemplate:
 
     def get_compile_time_args(self) -> list[str]:
         return [s.name for s in self.node.type_params]
+
 
 @dataclasses.dataclass
 class Function:
@@ -333,7 +339,6 @@ class BinOpExpression(Expression):
 class FunctionCallExpression(Expression):
     function: tuple[str, ...]
     args: list[Expression]
-    compile_time_args: typing.Any
 
     @classmethod
     def from_py_ast(cls, node: ast.Call, scope: Scope):
@@ -353,10 +358,11 @@ class FunctionCallExpression(Expression):
 
         scope.compile_function_template(name, compile_time_args)
 
+        compile_time_args_str = compile_time_args_to_str(compile_time_args)
+
         return cls(
-            function=(name,),
+            function=(name, compile_time_args_str),
             args=[expression_factory(arg, scope) for arg in node.args],
-            compile_time_args=compile_time_args
         )
 
 

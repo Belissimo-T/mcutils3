@@ -19,7 +19,10 @@ class StringResolver:
         if string in self.strings:
             return self.strings[string]
         else:
-            val = string.get_str(self.strings_set, self.resolve_identifier)
+            try:
+                val = string.get_str(self.strings_set, self.resolve_identifier)
+            except:
+                breakpoint()
             self.strings[string] = val
             self.strings_set.add(val)
             return val
@@ -58,11 +61,18 @@ class LiteralString(String):
 
 
 @dataclasses.dataclass(frozen=True)
+class _Counter:
+    start: int = 2
+
+    def __iter__(self):
+        return (lambda x: x + str(i) for i in itertools.count(self.start))
+
+
+@dataclasses.dataclass(frozen=True)
 class UniqueString(String, abc.ABC):
     string: String
 
-    counter: typing.Iterable[typing.Callable[[str], str]] = dataclasses.field(
-        default_factory=lambda: ((lambda x, __n=n: x + __n) for n in map(str, itertools.count(2))))
+    counter: typing.Iterable[typing.Callable[[str], str]] = dataclasses.field(default_factory=_Counter)
 
     def __post_init__(self):
         String.__init__(self)

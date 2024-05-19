@@ -132,12 +132,11 @@ class BinOpExpression(Expression):
 class FunctionCallExpression(Expression):
     function: tuple[str, ...]
     args: tuple[stores.ReadableStore, ...]
-    compile_time_args: typing.Any
 
     def fetch_to(self, args: tuple[stores.PrimitiveStore, ...], target: stores.PrimitiveStore) -> list[tree.Statement]:
         return [
             *[blocks_expr.StackPushStatement(arg) for arg in args],
-            blocks.FunctionCallStatement(self.function, self.compile_time_args)
+            blocks.FunctionCallStatement(self.function)
         ]
 
     @property
