@@ -94,7 +94,7 @@ def transform_exprs_in_stmts(
                 ))
             case tree.ReturnStatement(value=value):
                 out.append(ReturnStatement(
-                    value=transform_expr(value, symbols)
+                    value=transform_expr(value, symbols) if value is not None else None
                 ))
             case _:
                 out.append(stmt)

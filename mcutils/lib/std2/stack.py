@@ -3,7 +3,7 @@ from ...strings import UniqueTag, LiteralString
 
 
 class Library:
-    __pyfuncs__ = "tag_of_stack_nr",
+    __pyfuncs__ = "tag_of_stack_nr", "get_player", "get_objective"
 
     def __init__(self):
         self.std_stack_tags = {}
@@ -14,3 +14,8 @@ class Library:
 
         return self.std_stack_tags[stack_nr]
 
+    def get_player(self, var):
+        return var.player
+
+    def get_objective(self, var):
+        return var.objective

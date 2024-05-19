@@ -12,7 +12,14 @@ STD_STACK_RET_SEL = "@e[tag=%s, limit=1]" % (STD_STACK_RET_TAG,)
 
 
 def add_scoreboard_objective[name]():
-    "scoreboard objectives add %s dummy" % (name, )
+    "scoreboard objectives add %s dummy" % (name,)
+
+
+def print[variable]():
+    'tellraw @p {"score":{"name":"%s","objective":"%s"}}' % (
+        get_player[variable](),
+        get_objective[variable](),
+    )
 
 
 def load():
@@ -26,7 +33,7 @@ def load():
 
 
 def peek[stack_nr: int]():
-    "tag @e remove %s" % (STD_STACK_RET_TAG, )
+    "tag @e remove %s" % (STD_STACK_RET_TAG,)
 
     # select entity
     "execute as @e[tag=%s] if score @s %s = %s %s run tag @s add %s" % (
@@ -50,7 +57,7 @@ def peek[stack_nr: int]():
 
 
 def push[stack_nr: int]():
-    "tag @e remove %s" % (STD_STACK_RET_TAG, )
+    "tag @e remove %s" % (STD_STACK_RET_TAG,)
 
     # summon the entity
     'summon minecraft:marker 0 0 0 {Tags:["%s", "%s", "%s"]}' % (
@@ -80,7 +87,10 @@ def pop[stack_nr: int]():
 
     # remove the entity
 
-    "kill %s" % (STD_STACK_RET_SEL, )
+    "kill %s" % (STD_STACK_RET_SEL,)
+
+    # if 1:
+    #     return
 
     # decrement the stack length
     "scoreboard players remove %s %s 1" % (
@@ -89,11 +99,12 @@ def pop[stack_nr: int]():
     )
 
 
-
 def main():
     load()
 
     STD_ARG = 42
+
+    print[STD_ARG]()
 
     push[1]()
     peek[1]()

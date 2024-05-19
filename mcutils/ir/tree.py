@@ -57,6 +57,8 @@ def compile_time_args_to_str(args: tuple) -> str:
             return "no_compile_time_args"
         case [strings.String() as s]:
             return f"string_{s._id}"
+        case [ScoreType() as v]:
+            return f"score_{v.player._id if v.player else 'no_player'}_{v.objective._id if v.objective else 'no_objective'}"
         case _:
             breakpoint()
 
@@ -142,16 +144,16 @@ def statement_factory(node: ast.stmt, context: Scope) -> Statement:
         #         expression_factory(test),
         #         [statement_factory(stmt, context) for stmt in body]
         #     )
-        # case ast.If():
-        #     return IfStatement.from_py_ast(node)
+        case ast.If() as node:
+            return IfStatement.from_py_ast(node, context)
         case ast.Assign() | ast.AnnAssign():
             return AssignmentStatement.from_py_ast(node, context)
-        # case ast.Return(value=value):
-        #     return ReturnStatement(expression_factory(value))
-        # case ast.Continue():
-        #     return ContinueStatement()
-        # case ast.Break():
-        #     return BreakStatement()
+        case ast.Return(value=value):
+            return ReturnStatement(expression_factory(value, context) if value is not None else None)
+        case ast.Continue():
+            return ContinueStatement()
+        case ast.Break():
+            return BreakStatement()
         case _:
             raise CompilationError(f"Invalid statement {node!r}")
 
@@ -204,7 +206,7 @@ def parse_string(expr: ast.expr, context: Scope) -> strings.String:
                 case ast.Constant(value=val):
                     return context.get(func_name, "pyfunc")(val)
                 case ast.Name(id=name):
-                    return context.get(func_name, "pyfunc")(name)
+                    return context.get(func_name, "pyfunc")(context.get(name, ("compile_time_arg", "string", "variable")))
                 case _:
                     raise CompilationError(f"Invalid compile time args {s!r}.")
         case _:
@@ -360,7 +362,7 @@ class FunctionCallExpression(Expression):
                     case ast.Constant(value=val):
                         compile_time_args = val,
                     case ast.Name(id=n):
-                        compile_time_args = scope.get(n, ("compile_time_arg", "string")),
+                        compile_time_args = scope.get(n, ("compile_time_arg", "string", "variable")),
                     case _:
                         raise CompilationError(f"Unsupported compile time args {s!r}.")
             case ast.Name(id=name):
@@ -432,11 +434,11 @@ class IfStatement(NestedStatement):
     false_body: list[Statement]
 
     @classmethod
-    def from_py_ast(cls, node: ast.If):
+    def from_py_ast(cls, node: ast.If, context: Scope):
         return cls(
-            expression_factory(node.test),
-            [statement_factory(stmt) for stmt in node.body],
-            [statement_factory(stmt) for stmt in node.orelse]
+            expression_factory(node.test, context),
+            [statement_factory(stmt, context) for stmt in node.body],
+            [statement_factory(stmt, context) for stmt in node.orelse]
         )
 
 

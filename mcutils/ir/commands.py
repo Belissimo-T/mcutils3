@@ -85,7 +85,8 @@ class Function3:
                     case mcutils.ir.tree.LiteralStatement(strings=strings_):
                         commands += strings_
                     case blocks_expr.ReturnStatement(value=value):
-                        commands += stores_conv.var_to_var(value, std.STD_RET)
+                        if value is not None:
+                            commands += stores_conv.var_to_var(value, std.STD_RET)
                     case _:
                         breakpoint()
 
