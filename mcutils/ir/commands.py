@@ -4,11 +4,12 @@ import ast
 import dataclasses
 import typing
 
+import mcutils.ir.tree
 from . import blocks, tree, blocks_expr
 from .. import strings
 from ..data import stores, stores_conv, expressions
 from ..errors import CompilationError, compile_assert
-from ..lib import std
+from ..lib import std, tools
 from ..location import Location
 
 
@@ -43,29 +44,8 @@ class Function3:
             commands = []
 
             for statement in block.statements:
+                # transform stack operations to function calls
                 match statement:
-                    case blocks_expr.ConditionalBlockCallStatement(condition=condition, true_block=true_block,
-                                                                   unless=unless):
-                        mcfunction = mcfunctions[true_block]
-                        commands.append(
-                            strings.LiteralString(
-                                f"execute {'if ' if unless else 'unless'} score %s matches 0 run function %s",
-                                *condition, LocationOfString(mcfunction))
-                        )
-                        pass
-                    case blocks.BlockCallStatement(block=mcfunction_path):
-                        mcfunction = mcfunctions[mcfunction_path]
-                        commands.append(
-                            strings.LiteralString("function %s", LocationOfString(mcfunction))
-                        )
-                    case blocks.FunctionCallStatement(function=function, compile_time_args=compile_time_args):
-                        func = functions[function]
-                        mcfunction = func.mcfunctions[func.entry_point]
-                        commands.append(
-                            strings.LiteralString("function %s", LocationOfString(mcfunction))
-                        )
-                    case blocks.LiteralStatement(strings=strings_):
-                        commands += strings_
                     case blocks_expr.StackPushStatement(value=value):
                         commands += [
                             *stores_conv.var_to_var(value, std.STD_ARG),
@@ -76,6 +56,34 @@ class Function3:
                             *stack.std_stack_pop(0),
                             *stores_conv.var_to_var(std.STD_RET, dst),
                         ]
+
+                match statement:
+                    case blocks_expr.ConditionalBlockCallStatement(condition=condition, true_block=true_block,
+                                                                   unless=unless):
+                        mcfunction = mcfunctions[true_block]
+                        commands.append(
+                            strings.LiteralString(
+                                f"execute {'if' if unless else 'unless'} score %s %s matches 0 run function %s",
+                                *condition, LocationOfString(mcfunction))
+                        )
+                        pass
+                    case blocks.BlockCallStatement(block=mcfunction_path):
+                        mcfunction = mcfunctions[mcfunction_path]
+                        commands.append(
+                            strings.LiteralString("function %s", LocationOfString(mcfunction))
+                        )
+                    case blocks.FunctionCallStatement(function=function, compile_time_args=compile_time_args):
+                        if function == ("print", ):
+                            # TODO
+                            commands += []
+                        else:
+                            func = functions[function]
+                            mcfunction = func.mcfunctions[func.entry_point]
+                            commands.append(
+                                strings.LiteralString("function %s", LocationOfString(mcfunction))
+                            )
+                    case mcutils.ir.tree.LiteralStatement(strings=strings_):
+                        commands += strings_
                     case blocks_expr.ReturnStatement(value=value):
                         commands += stores_conv.var_to_var(value, std.STD_RET)
                     case _:

@@ -7,6 +7,8 @@ import typing
 
 from .errors import CompilationError
 
+_ID = 0
+
 
 class StringResolver:
     def __init__(self):
@@ -24,19 +26,25 @@ class StringResolver:
 
 
 class String(abc.ABC):
+    def __init__(self):
+        global _ID
+        self._id = _ID
+        _ID += 1
+
     @abc.abstractmethod
     def get_str(self, existing_strings: set[str], resolve_string: typing.Callable[[String], str]) -> str:
         ...
 
     def __hash__(self):
-        return hash(id(self))
+        return hash((self._id, self.__class__.__name__))
 
     def __eq__(self, other):
-        return id(self) == id(other)
+        return self._id == other._id
 
 
 class LiteralString(String):
     def __init__(self, literal: str, *args: String | str):
+        super().__init__()
         self.literal = literal
         self.args = args
 
@@ -45,7 +53,7 @@ class LiteralString(String):
 
         try:
             return self.literal % format_args
-        except TypeError as e:
+        except (TypeError, ValueError) as e:
             raise CompilationError(f"Command {self.literal!r} has {len(self.args)} args.") from e
 
 
@@ -55,6 +63,9 @@ class UniqueString(String, abc.ABC):
 
     counter: typing.Iterable[typing.Callable[[str], str]] = dataclasses.field(
         default_factory=lambda: ((lambda x, __n=n: x + __n) for n in map(str, itertools.count(2))))
+
+    def __post_init__(self):
+        String.__init__(self)
 
     def get_str(self, existing_strings: set[str], resolve_string: typing.Callable[[String], str]) -> str:
         val = resolve_string(self.string)

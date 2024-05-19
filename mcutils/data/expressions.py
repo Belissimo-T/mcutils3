@@ -4,6 +4,7 @@ import abc
 import dataclasses
 import typing
 
+import mcutils.ir.tree
 from . import stores_conv
 from .. import strings
 from ..data import stores
@@ -43,7 +44,7 @@ def fetch(
 
         return out
     else:
-        return [blocks.LiteralStatement(stores_conv.var_to_var(src, dst))]
+        return [mcutils.ir.tree.LiteralStatement(stores_conv.var_to_var(src, dst))]
 
 
 class Expression(stores.ReadableStore):
@@ -76,8 +77,8 @@ class BinOpExpression(Expression):
         left, right = args
         if self.op == "+":
             return [
-                blocks.LiteralStatement(stores_conv.add_in_place(left, right)),
-                blocks.LiteralStatement(stores_conv.var_to_var(left, target)),
+                mcutils.ir.tree.LiteralStatement(stores_conv.add_in_place(left, right)),
+                mcutils.ir.tree.LiteralStatement(stores_conv.var_to_var(left, target)),
             ]
         elif self.op in ("<", "<=", ">", ">=", "=="):
             if self.op == "==":
@@ -85,15 +86,39 @@ class BinOpExpression(Expression):
             else:
                 op = self.op
             return [
-                blocks.LiteralStatement(stores_conv.var_to_var(left, self._TEMP1)),
-                blocks.LiteralStatement(stores_conv.var_to_var(right, self._TEMP2)),
-                blocks.LiteralStatement([
+                mcutils.ir.tree.LiteralStatement(stores_conv.var_to_var(left, self._TEMP1)),
+                mcutils.ir.tree.LiteralStatement(stores_conv.var_to_var(right, self._TEMP2)),
+                mcutils.ir.tree.LiteralStatement([
                     strings.LiteralString(
-                        f"execute if score %s {op} %s run scoreboard players set %s 1",
+                        f"execute if score %s %s {op} %s %s run scoreboard players set %s %s 1",
                         *self._TEMP1, *self._TEMP2, *self._TEMP1
                     )
                 ]),
-                blocks.LiteralStatement(stores_conv.var_to_var(self._TEMP1, target)),
+                mcutils.ir.tree.LiteralStatement(stores_conv.var_to_var(self._TEMP1, target)),
+            ]
+        elif self.op == "%":
+            return [
+                mcutils.ir.tree.LiteralStatement(stores_conv.var_to_var(left, self._TEMP1)),
+                mcutils.ir.tree.LiteralStatement(stores_conv.var_to_var(right, self._TEMP2)),
+                mcutils.ir.tree.LiteralStatement([
+                    strings.LiteralString(
+                        f"scoreboard players operation %s %s %%= %s %s",
+                        *self._TEMP1, *self._TEMP2
+                    )
+                ]),
+                mcutils.ir.tree.LiteralStatement(stores_conv.var_to_var(self._TEMP1, target)),
+            ]
+        elif self.op == "and":
+            return [
+                mcutils.ir.tree.LiteralStatement(stores_conv.var_to_var(left, self._TEMP1)),
+                mcutils.ir.tree.LiteralStatement(stores_conv.var_to_var(right, self._TEMP2)),
+                mcutils.ir.tree.LiteralStatement([
+                    strings.LiteralString(
+                        f"execute unless score %s %s matches 0 unless score %s %s matches 0 run scoreboard players set %s %s 1",
+                        *self._TEMP1, *self._TEMP2, *self._TEMP1
+                    )
+                ]),
+                mcutils.ir.tree.LiteralStatement(stores_conv.var_to_var(self._TEMP1, target)),
             ]
         else:
             compile_assert(False)

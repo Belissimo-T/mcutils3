@@ -4,9 +4,9 @@ import dataclasses
 import typing
 
 from . import tree, blocks_expr, compile_control_flow
-from .. import strings
 from ..data import stores, expressions
 from ..errors import CompilationError, compile_assert
+from ..lib import std
 
 
 @dataclasses.dataclass
@@ -14,14 +14,14 @@ class Namespace2:
     functions: dict[tuple[str, ...], Function2]
 
     @classmethod
-    def from_tree_namespace(cls, namespace: tree.Namespace) -> Namespace2:
+    def from_tree_namespace(cls, namespace: tree.File) -> Namespace2:
         return cls({
             name: Function2.from_tree_function(func)
-            for name, func in namespace.symbols.items()
+            for name, func in namespace.function_templates.items()
         })
 
 
-_IF_TEMP = stores.ScoreboardStore(strings.UniqueScoreboardPlayer(strings.LiteralString("conditional")), "__mcutils__")
+_IF_TEMP = std.get_temp_var("conditional")
 
 
 @dataclasses.dataclass
@@ -126,7 +126,7 @@ class Function2:
 
     @staticmethod
     def get_symbols(blocks: typing.Iterable[Block], args: dict[str, tree.VariableType]):
-        var_types: dict[str, tree.VariableType] = args
+        var_types: dict[str, tree.VariableType] = args.copy()
 
         for block in blocks:
             for statement in block.statements:
@@ -143,9 +143,7 @@ class Function2:
 
         for name, var_type in var_types.items():
             if isinstance(var_type, tree.ScoreType):
-                symbols[name] = stores.ScoreboardStore(
-                    strings.UniqueScoreboardPlayer(strings.LiteralString(name)), "__mcutils__"
-                )
+                symbols[name] = std.get_temp_var("__user_" + name)
             elif isinstance(var_type, tree.NbtType):
                 compile_assert(False)
                 # scope.symbols[name] = stores.NbtStore(var_type.dtype)
@@ -210,6 +208,3 @@ class FunctionCallStatement(tree.Statement):
     compile_time_args: typing.Any
 
 
-@dataclasses.dataclass
-class LiteralStatement(tree.Statement):
-    strings: list[strings.String]
