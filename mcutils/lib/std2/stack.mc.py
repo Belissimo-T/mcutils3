@@ -1,5 +1,7 @@
-STD_RET: Score["ret"]
-STD_ARG: Score["arg"]
+STD_OBJECTIVE: ScoreboardObjective["mcutils"]
+
+STD_RET: Score["ret", STD_OBJECTIVE]
+STD_ARG: Score["arg", STD_OBJECTIVE]
 
 STD_STACK_OBJECTIVE: ScoreboardObjective["stack"]
 STD_STACK_INDEX_OBJECTIVE: ScoreboardObjective["index"]
@@ -9,11 +11,16 @@ STD_STACK_RET_TAG: Tag["stack_ret"]
 STD_STACK_RET_SEL = "@e[tag=%s, limit=1]" % (STD_STACK_RET_TAG,)
 
 
+def add_scoreboard_objective[name]():
+    "scoreboard objectives add %s dummy" % (name, )
+
+
 def load():
     # create the stack objective
 
-    "scoreboard objectives add %s dummy" % (STD_STACK_INDEX_OBJECTIVE, )
-    "scoreboard objectives add %s dummy" % (STD_STACK_VALUE_OBJECTIVE, )
+    add_scoreboard_objective[STD_STACK_INDEX_OBJECTIVE]()
+    add_scoreboard_objective[STD_STACK_VALUE_OBJECTIVE]()
+    add_scoreboard_objective[STD_STACK_OBJECTIVE]()
 
     "say * Loaded stack library!"
 
@@ -51,6 +58,8 @@ def push[stack_nr: int]():
         STD_STACK_TAG,
         STD_STACK_RET_TAG
     )
+
+    stack_length: Score[tag_of_stack_nr[stack_nr](), STD_STACK_OBJECTIVE]
 
     # increment the stack length
     "scoreboard players add %s %s 1" % (

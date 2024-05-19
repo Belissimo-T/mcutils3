@@ -20,8 +20,18 @@ class Scope:
 
     compile_function_template: typing.Callable[[str, tuple], None] | None = None
 
-    def get(self, name: str, type_: typing.Literal["variable", "string", "pyfunc", "compile_time_arg"]):
+    _ALLOWED_TYPES = typing.Literal["variable", "string", "pyfunc", "compile_time_arg"]
+
+    def get(self, name: str, type_: _ALLOWED_TYPES | tuple[_ALLOWED_TYPES, ...]):
         try:
+            if isinstance(type_, tuple):
+                for t in type_:
+                    try:
+                        return self.get(name, t)
+                    except KeyError:
+                        pass
+                raise KeyError(f"Undefined {type_} {name!r}.")
+
             if type_ == "variable":
                 return self.variables[name]
             elif type_ == "string":
@@ -32,11 +42,11 @@ class Scope:
                 return self.compile_time_args[name]
             else:
                 assert False
-        except KeyError:
+        except KeyError as e:
             if self.parent_scope is not None:
                 return self.parent_scope.get(name, type_)
             else:
-                raise CompilationError(f"Undefined {type_} {name!r}")
+                raise KeyError(f"Undefined {type_} {name!r}.") from e
 
 
 def compile_time_args_to_str(args: tuple) -> str:
@@ -45,6 +55,8 @@ def compile_time_args_to_str(args: tuple) -> str:
             return str(a)
         case []:
             return "no_compile_time_args"
+        case [strings.String() as s]:
+            return f"string_{s._id}"
         case _:
             breakpoint()
 
@@ -186,7 +198,7 @@ def parse_string(expr: ast.expr, context: Scope) -> strings.String:
         case ast.Constant(value=val):
             return strings.LiteralString(val)
         case ast.Name(id=name):
-            return context.get(name, "string")
+            return context.get(name, ("string", "compile_time_arg"))
         case ast.Call(func=ast.Subscript(value=ast.Name(id=func_name), slice=s), args=[], keywords=[]):
             match s:
                 case ast.Constant(value=val):
@@ -348,7 +360,7 @@ class FunctionCallExpression(Expression):
                     case ast.Constant(value=val):
                         compile_time_args = val,
                     case ast.Name(id=n):
-                        compile_time_args = scope.get(n, "compile_time_arg"),
+                        compile_time_args = scope.get(n, ("compile_time_arg", "string")),
                     case _:
                         raise CompilationError(f"Unsupported compile time args {s!r}.")
             case ast.Name(id=name):

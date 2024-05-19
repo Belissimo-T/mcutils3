@@ -19,10 +19,8 @@ class StringResolver:
         if string in self.strings:
             return self.strings[string]
         else:
-            try:
-                val = string.get_str(self.strings_set, self.resolve_identifier)
-            except:
-                breakpoint()
+            val = string.get_str(self.strings_set, self.resolve_identifier)
+
             self.strings[string] = val
             self.strings_set.add(val)
             return val

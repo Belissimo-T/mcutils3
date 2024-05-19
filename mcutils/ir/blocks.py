@@ -4,6 +4,7 @@ import dataclasses
 import typing
 
 from . import tree, blocks_expr, compile_control_flow
+from .. import strings
 from ..data import stores, expressions
 from ..errors import CompilationError, compile_assert
 from ..lib import std
@@ -142,16 +143,23 @@ class Function2:
         symbols = {}
 
         for name, var_type in var_types.items():
-            if isinstance(var_type, tree.ScoreType):
-                symbols[name] = std.get_temp_var("__user_" + name)
-            elif isinstance(var_type, tree.NbtType):
-                compile_assert(False)
-                # scope.symbols[name] = stores.NbtStore(var_type.dtype)
-            elif isinstance(var_type, tree.LocalScopeType):
-                compile_assert(False)
-                # scope.symbols[name] = stores.LocalScopeStore(var_type.dtype)
-            else:
-                raise CompilationError(f"Invalid variable type {var_type!r}.")
+            match var_type:
+                case tree.ScoreType(player=None, objective=None):
+                    symbols[name] = std.get_temp_var("__user_" + name)
+                case tree.ScoreType(player=None, objective=obj):
+                    symbols[name] = stores.ScoreboardStore(strings.UniqueScoreboardPlayer("__user_" + name), obj)
+                case tree.ScoreType(player=player, objective=None):
+                    symbols[name] = stores.ScoreboardStore(player, std.MCUTILS_STD_OBJECTIVE)
+                case tree.ScoreType(player=player, objective=obj):
+                    symbols[name] = stores.ScoreboardStore(player, obj)
+                case tree.NbtType():
+                    compile_assert(False)
+                    # scope.symbols[name] = stores.NbtStore(var_type.dtype)
+                case tree.LocalScopeType():
+                    compile_assert(False)
+                    # scope.symbols[name] = stores.LocalScopeStore(var_type.dtype)
+                case _:
+                    raise CompilationError(f"Invalid variable type {var_type!r}.")
 
         return symbols
 
