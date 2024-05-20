@@ -13,7 +13,7 @@ def transform_whiles(mcfunctions: dict[tuple[str, ...], blocks.Block]) -> dict[t
         mcfunction_children: dict[tuple[str, ...], blocks.Block] = {}
 
         current_child_i = 0
-        current_child = blocks.Block([], mcfunction.continuation_info)
+        current_child = blocks.Block([], copy.copy(mcfunction.continuation_info))
 
         for statement in mcfunction.statements:
             if isinstance(statement, blocks.WhileStatement):
@@ -46,7 +46,8 @@ def transform_whiles(mcfunctions: dict[tuple[str, ...], blocks.Block]) -> dict[t
                             blocks.IfStatement(
                                 condition=statement.condition,
                                 true_block=statement.body,
-                                false_block=in_loop_continuation_info.loops[-1].break_
+                                false_block=in_loop_continuation_info.loops[-1].break_,
+                                force_no_redirect_branches=True
                             )
                         ]
                     )
@@ -73,7 +74,7 @@ def transform_conditionals(mcfunctions: dict[tuple[str, ...], blocks.Block]) -> 
         mcfunction_children: dict[tuple[str, ...], blocks.Block] = {}
 
         current_child_i = 0
-        current_child = blocks.Block([], mcfunction.continuation_info)
+        current_child = blocks.Block([], copy.copy(mcfunction.continuation_info))
 
         for node in mcfunction.statements:
             node = copy.deepcopy(node)
@@ -87,13 +88,27 @@ def transform_conditionals(mcfunctions: dict[tuple[str, ...], blocks.Block]) -> 
                 current_child_i += 1
                 current_child.continuation_info.default = None  # this mcfunction ends here
 
-                mcfunctions[node.true_block].continuation_info.default = (*mcfunction_name, f"{current_child_i}")
-                if node.true_block is not None:
-                    mcfunctions[node.false_block].continuation_info.default = (*mcfunction_name, f"{current_child_i}")
+                if node.force_no_redirect_branches:
+                    pass
                 else:
-                    node.false_block = (*mcfunction_name, f"{current_child_i}")
+                    mcfunctions[node.true_block].continuation_info = (
+                        mcfunctions[node.true_block].continuation_info.with_(
+                            default=(*mcfunction_name, f"{current_child_i}")
+                        )
+                    )
+                    if node.false_block is not None:
+                        mcfunctions[node.false_block].continuation_info = (
+                            mcfunctions[node.false_block].continuation_info.with_(
+                                default=(*mcfunction_name, f"{current_child_i}")
+                            )
+                        )
+                    else:
+                        node.false_block = (*mcfunction_name, f"{current_child_i}")
 
                 current_child = blocks.Block([], mcfunction.continuation_info)
+
+        # if len(mcfunction_children) == 1:
+        #     breakpoint()
 
         mcfunction_children |= {
             (f"{current_child_i}",): current_child

@@ -99,6 +99,13 @@ def pop[stack_nr: int]():
     )
 
 
+def while_test():
+    a: Score = 2
+
+    while a:
+        "say Hii"
+
+
 def main():
     load()
 
@@ -109,3 +116,5 @@ def main():
     push[1]()
     peek[1]()
     pop[1]()
+
+    while_test()

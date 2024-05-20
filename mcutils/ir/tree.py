@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import ast
+import ast_comments as ast
 import dataclasses
 import typing
 
@@ -54,7 +54,7 @@ def compile_time_args_to_str(args: tuple) -> str:
         case [int(a)]:
             return str(a)
         case []:
-            return "no_compile_time_args"
+            return "0"
         case [strings.String() as s]:
             return f"string_{s._id}"
         case [ScoreType() as v]:
@@ -139,11 +139,11 @@ def statement_factory(node: ast.stmt, context: Scope) -> Statement:
             return LiteralStatement([strings.LiteralString(val)])
         case ast.Expr():
             return ExpressionStatement(expression_factory(node.value, context))
-        # case ast.While(test=test, body=body):
-        #     return WhileLoopStatement(
-        #         expression_factory(test),
-        #         [statement_factory(stmt, context) for stmt in body]
-        #     )
+        case ast.While(test=test, body=body):
+            return WhileLoopStatement(
+                expression_factory(test, context),
+                [statement_factory(stmt, context) for stmt in body]
+            )
         case ast.If() as node:
             return IfStatement.from_py_ast(node, context)
         case ast.Assign() | ast.AnnAssign():
@@ -154,6 +154,10 @@ def statement_factory(node: ast.stmt, context: Scope) -> Statement:
             return ContinueStatement()
         case ast.Break():
             return BreakStatement()
+        case ast.Comment(value=v):
+            return CommentStatement(v.lstrip("#").strip())
+        case ast.Pass():
+            return CommentStatement("pass")
         case _:
             raise CompilationError(f"Invalid statement {node!r}")
 
@@ -206,7 +210,8 @@ def parse_string(expr: ast.expr, context: Scope) -> strings.String:
                 case ast.Constant(value=val):
                     return context.get(func_name, "pyfunc")(val)
                 case ast.Name(id=name):
-                    return context.get(func_name, "pyfunc")(context.get(name, ("compile_time_arg", "string", "variable")))
+                    return context.get(func_name, "pyfunc")(
+                        context.get(name, ("compile_time_arg", "string", "variable")))
                 case _:
                     raise CompilationError(f"Invalid compile time args {s!r}.")
         case _:
@@ -470,3 +475,8 @@ class AssignmentStatement(Statement):
 @dataclasses.dataclass
 class LiteralStatement(Statement):
     strings: list[strings.String]
+
+
+@dataclasses.dataclass
+class CommentStatement(Statement):
+    message: str

@@ -123,6 +123,20 @@ class Function2:
 
             block.statements = new_statements
 
+        # optimization:
+        contains_return = False
+        for block in out.blocks.values():
+            for statement in block.statements:
+                if isinstance(statement, blocks_expr.ConditionalBlockCallStatement):
+                    if statement.true_block == ("__return",):
+                        contains_return = True
+                        break
+            else:
+                continue
+            break
+        if not contains_return:
+            del out.blocks[("__return",)]
+
         return out
 
     @staticmethod
@@ -197,6 +211,7 @@ class IfStatement(tree.StoppingStatement):
     condition: tree.Expression
     true_block: tuple[str, ...]
     false_block: tuple[str, ...]
+    force_no_redirect_branches: bool = False
 
 
 @dataclasses.dataclass

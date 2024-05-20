@@ -18,7 +18,7 @@ class Namespace3:
     functions: dict[tuple[str, ...], Function3]
 
     @classmethod
-    def from_namespace2(cls, namespace: blocks.Namespace2) -> Namespace3:
+    def from_namespace2(cls, namespace: blocks.Namespace2, std_lib_config: StdLibConfig | None) -> Namespace3:
         functions = {}
 
         for path, func in namespace.functions.items():
@@ -28,22 +28,25 @@ class Namespace3:
             functions[path].preprocess(func)
 
         for path, func in namespace.functions.items():
-            functions[path].process(func, functions)
+            functions[path].process(func, functions, std_lib_config)
 
         return cls(functions)
+
+
+@dataclasses.dataclass
+class StdLibConfig:
+    stack_push: tuple[str, ...]
+    stack_pop: tuple[str, ...]
+    stack_peek: tuple[str, ...]
 
 
 class Function3:
     mcfunctions: dict[tuple[str, ...], McFunction]
     args: dict[str, tree.VariableType]
     entry_point: tuple[str, ...] = ()
-    symbols: dict[str, stores.ReadableStore] = dataclasses.field(default_factory=dict)
+    symbols: dict[str, stores.WritableStore | stores.ReadableStore] = dataclasses.field(default_factory=dict)
 
-    def process(self, func: blocks.Function2, functions: dict[tuple[str, ...], Function3]) -> Function3:
-        self.args = func.args
-        self.entry_point = func.entry_point
-        self.symbols = func.symbols
-
+    def process(self, func: blocks.Function2, functions: dict[tuple[str, ...], Function3], std_lib_config: StdLibConfig | None) -> Function3:
         for path, block in func.blocks.items():
             commands = []
 
@@ -51,17 +54,33 @@ class Function3:
                 # transform stack operations to function calls
                 match statement:
                     case blocks_expr.StackPushStatement(value=value):
+                        compile_assert(std_lib_config is not None, "std lib is required for stack operations")
+
+                        std_stack_push_func = functions[std_lib_config.stack_push]
+                        std_arg = std_stack_push_func.symbols["STD_ARG"]
+
                         commands += [
-                            *stores_conv.var_to_var(value, std.STD_ARG),
-                            *stack.std_stack_push(0)
+                            *stores_conv.var_to_var(value, std_arg),
+                            strings.LiteralString(
+                                "function %s",
+                                LocationOfString(std_stack_push_func.mcfunctions[std_stack_push_func.entry_point])
+                            )
                         ]
                     case blocks_expr.StackPopStatement(dst=dst):
+                        compile_assert(std_lib_config is not None, "std lib is required for stack operations")
+
+                        std_stack_pop_func = functions[std_lib_config.stack_pop]
+                        std_ret = std_stack_pop_func.symbols["STD_RET"]
+
                         commands += [
-                            *stack.std_stack_pop(0),
-                            *stores_conv.var_to_var(std.STD_RET, dst),
+                            strings.LiteralString(
+                                "function %s",
+                                LocationOfString(std_stack_pop_func.mcfunctions[std_stack_pop_func.entry_point])
+                            ),
+                            *stores_conv.var_to_var(std_ret, dst),
                         ]
 
-                match statement:
+                # match statement:
                     case blocks_expr.ConditionalBlockCallStatement(condition=condition, true_block=true_block,
                                                                    unless=unless):
                         mcfunction = self.mcfunctions[true_block]
@@ -86,25 +105,37 @@ class Function3:
                         commands += strings_
                     case blocks_expr.ReturnStatement(value=value):
                         if value is not None:
+                            compile_assert(False, "Not supported")
                             commands += stores_conv.var_to_var(value, std.STD_RET)
+                    case tree.CommentStatement(message=msg):
+                        commands.append(strings.Comment(msg))
                     case _:
                         breakpoint()
 
             self.mcfunctions[path].commands = commands
 
+        ...
+
     def preprocess(self, func: blocks.Function2):
         mcfunctions = {path: McFunction([]) for path in func.blocks}
 
         self.mcfunctions = mcfunctions
+        self.args = func.args
+        self.entry_point = func.entry_point
+        self.symbols = func.symbols
 
 
 @dataclasses.dataclass
 class LocationOfString(strings.String):
     mcfunction: McFunction
 
-    def get_str(self, existing_strings: set[str], resolve_string: typing.Callable[[strings.String], str]) -> str:
+    def get_str(
+        self,
+        existing_strings: dict[str, set[str]],
+        resolve_string: typing.Callable[[strings.String], str]
+    ) -> tuple[str, str]:
         compile_assert(self.mcfunction.location is not None)
-        return self.mcfunction.location.to_str()
+        return self.mcfunction.location.to_str(), "location"
 
     def __hash__(self):
         return hash(id(self))

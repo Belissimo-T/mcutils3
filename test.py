@@ -1,4 +1,4 @@
-import ast
+import ast_comments as ast
 import pathlib
 
 from mcutils.ir import tree, blocks, compile_control_flow, commands, datapack
@@ -18,7 +18,13 @@ def main():
 
     b = blocks.Namespace2.from_tree_namespace(a)
 
-    c = commands.Namespace3.from_namespace2(b)
+    std_lib_config = commands.StdLibConfig(
+        stack_push=("push", "1"),
+        stack_pop=("pop", "1"),
+        stack_peek=("peek", "1"),
+    )
+
+    c = commands.Namespace3.from_namespace2(b, std_lib_config=std_lib_config)
     d = datapack.Datapack("test", {"test": c})
     d.export(pathlib.Path("testout").absolute())
 
