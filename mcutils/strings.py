@@ -51,6 +51,9 @@ class String(abc.ABC):
 
 class LiteralString(String):
     def __init__(self, literal: str, *args: String | str):
+        if any(arg is None for arg in args):
+            raise CompilationError("None in args.")
+
         super().__init__()
         self.literal = literal
         self.args = args

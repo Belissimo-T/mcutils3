@@ -48,6 +48,14 @@ class Scope:
             else:
                 raise KeyError(f"Undefined {type_} {name!r}.") from e
 
+    def get_compile_time_function_template(self):
+        if self.compile_function_template is not None:
+            return self.compile_function_template
+        elif self.parent_scope is not None:
+            return self.parent_scope.get_compile_time_function_template()
+        else:
+            raise CompilationError("No compile time function template found.")
+
 
 def compile_time_args_to_str(args: tuple) -> str:
     match args:
@@ -59,6 +67,8 @@ def compile_time_args_to_str(args: tuple) -> str:
             return f"string_{s._id}"
         case [ScoreType() as v]:
             return f"score_{v.player._id if v.player else 'no_player'}_{v.objective._id if v.objective else 'no_objective'}"
+        case [str(s)]:
+            return s
         case _:
             breakpoint()
 
@@ -95,6 +105,8 @@ class File:
                     ])
                 case ast.AnnAssign(target=ast.Name(id=name), annotation=ann):
                     scope.variables[name] = annotation_to_datatype(ann, scope)
+                case ast.Comment():
+                    pass
                 case _:
                     raise CompilationError(f"Invalid statement {stmt!r} in namespace {ast!r}")
 
@@ -256,17 +268,17 @@ class FunctionTemplate:
 class Function:
     statements: list[Statement]
     args: dict[str, VariableType]
-    variables: dict[str, VariableType]
+    scope: Scope
 
     @classmethod
     def from_py_ast(cls, node: ast.FunctionDef, scope: Scope):
-        variables = {}
+        scope = Scope(parent_scope=scope)
         statements = []
 
         for stmt in node.body:
             match stmt:
                 case ast.AnnAssign(target=ast.Name(id=name), annotation=ann, value=v):
-                    variables[name] = annotation_to_datatype(ann, scope)
+                    scope.variables[name] = annotation_to_datatype(ann, scope)
                     if v is None:
                         continue
 
@@ -275,7 +287,7 @@ class Function:
         return cls(
             statements=statements,
             args={arg.arg: annotation_to_datatype(arg.annotation, scope) for arg in node.args.args},
-            variables=variables,
+            scope=scope
         )
 
 
@@ -382,7 +394,7 @@ class FunctionCallExpression(Expression):
             case _:
                 raise CompilationError(f"Invalid function {node.func!r}.")
 
-        scope.compile_function_template(name, compile_time_args)
+        scope.get_compile_time_function_template()(name, compile_time_args)
 
         compile_time_args_str = compile_time_args_to_str(compile_time_args)
 

@@ -87,7 +87,7 @@ class Function2:
         cls.process_block(statements=func.statements, blocks=out.blocks,
                           continuation_info=ContinuationInfo(return_=("__return",)))
 
-        out.symbols = cls.get_symbols(out.blocks.values(), scope.variables | func.variables | out.args)
+        out.symbols = cls.get_symbols(out.blocks.values(), scope.variables | func.scope.variables | out.args)
 
         out.blocks = compile_control_flow.transform_all(out.blocks)
 
@@ -143,16 +143,16 @@ class Function2:
     def get_symbols(blocks: typing.Iterable[Block], args: dict[str, tree.VariableType]):
         var_types: dict[str, tree.VariableType] = args.copy()
 
-        for block in blocks:
-            for statement in block.statements:
-                if isinstance(statement, tree.AssignmentStatement):
-                    if statement.target_type is not None:
-                        if statement.target_type != var_types.get(statement.target, None) is not None:
-                            raise CompilationError(
-                                f"Variable {statement.target!r} has type {var_types[statement.target]} but is assigned "
-                                f"to {statement.target_type}."
-                            )
-                        var_types[statement.target] = statement.target_type
+        # for block in blocks:
+        #     for statement in block.statements:
+        #         if isinstance(statement, tree.AssignmentStatement):
+        #             if statement.target_type is not None:
+        #                 if statement.target_type != var_types.get(statement.target, None) is not None:
+        #                     raise CompilationError(
+        #                         f"Variable {statement.target!r} has type {var_types[statement.target]} but is assigned "
+        #                         f"to {statement.target_type}."
+        #                     )
+        #                 var_types[statement.target] = statement.target_type
 
         symbols = {}
 

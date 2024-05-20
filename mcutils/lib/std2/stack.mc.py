@@ -28,6 +28,8 @@ def load():
     add_scoreboard_objective[STD_STACK_INDEX_OBJECTIVE]()
     add_scoreboard_objective[STD_STACK_VALUE_OBJECTIVE]()
     add_scoreboard_objective[STD_STACK_OBJECTIVE]()
+    add_scoreboard_objective[STD_OBJECTIVE]()
+    add_scoreboard_objective["mcutils_std"]()
 
     "say * Loaded stack library!"
 
@@ -91,21 +93,33 @@ def pop[stack_nr: int]():
 
 
 def while_test():
-    a: Score = 2
+    a: Score["a", STD_OBJECTIVE] = 10
 
     while a:
-        "say Hii"
+        "say While Iteration!"
+        print[a]()
+        a -= 1
 
 
 def main():
     load()
 
+    STD_RET = 0
+
     STD_ARG = 42
-
     print[STD_ARG]()
-
     push[1]()
-    peek[1]()
+
+    STD_ARG = 43
+    print[STD_ARG]()
+    push[1]()
+
+    # peek[1]()
     pop[1]()
+    print[STD_RET]()
+
+    pop[1]()
+    print[STD_RET]()
+
 
     while_test()
