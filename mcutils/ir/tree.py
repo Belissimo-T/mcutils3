@@ -148,6 +148,8 @@ def statement_factory(node: ast.stmt, context: Scope) -> Statement:
             return IfStatement.from_py_ast(node, context)
         case ast.Assign() | ast.AnnAssign():
             return AssignmentStatement.from_py_ast(node, context)
+        case ast.AugAssign() as a:
+            return InPlaceOperationStatement.from_py_ast(a, context)
         case ast.Return(value=value):
             return ReturnStatement(expression_factory(value, context) if value is not None else None)
         case ast.Continue():
@@ -317,41 +319,46 @@ class BinOpExpression(Expression):
             left, right = node.values
             op = node.op
 
-        match op:
-            case ast.Eq():
-                op = "=="
-            case ast.NotEq():
-                op = "!="
-            case ast.Lt():
-                op = "<"
-            case ast.LtE():
-                op = "<="
-            case ast.Gt():
-                op = ">"
-            case ast.GtE():
-                op = ">="
-            case ast.Add():
-                op = "+"
-            case ast.Sub():
-                op = "-"
-            case ast.Mult():
-                op = "*"
-            case ast.Div():
-                op = "/"
-            case ast.Mod():
-                op = "%"
-            case ast.And():
-                op = "and"
-            case ast.Or():
-                op = "or"
-            case _:
-                raise CompilationError(f"Invalid operator {op!r}")
+        op = op_to_str(op)
 
         return cls(
             expression_factory(left, context),
             expression_factory(right, context),
             op
         )
+
+
+def op_to_str(op):
+    match op:
+        case ast.Eq():
+            op = "=="
+        case ast.NotEq():
+            op = "!="
+        case ast.Lt():
+            op = "<"
+        case ast.LtE():
+            op = "<="
+        case ast.Gt():
+            op = ">"
+        case ast.GtE():
+            op = ">="
+        case ast.Add():
+            op = "+"
+        case ast.Sub():
+            op = "-"
+        case ast.Mult():
+            op = "*"
+        case ast.Div():
+            op = "/"
+        case ast.Mod():
+            op = "%"
+        case ast.And():
+            op = "and"
+        case ast.Or():
+            op = "or"
+        case _:
+            raise CompilationError(f"Invalid operator {op!r}")
+    return op
 
 
 @dataclasses.dataclass
@@ -469,6 +476,21 @@ class AssignmentStatement(Statement):
             target.id,
             ann,
             expression_factory(node.value, context)
+        )
+
+
+@dataclasses.dataclass
+class InPlaceOperationStatement(Statement):
+    target: str
+    value: Expression
+    op: typing.Literal["+", "-", "*", "/"]
+
+    @classmethod
+    def from_py_ast(cls, node: ast.AugAssign, context: Scope):
+        return cls(
+            node.target.id,
+            expression_factory(node.value, context),
+            op_to_str(node.op)
         )
 
 

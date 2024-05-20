@@ -69,10 +69,7 @@ def push[stack_nr: int]():
     stack_length: Score[tag_of_stack_nr[stack_nr](), STD_STACK_OBJECTIVE]
 
     # increment the stack length
-    "scoreboard players add %s %s 1" % (
-        tag_of_stack_nr[stack_nr](),
-        STD_STACK_OBJECTIVE,
-    )
+    stack_length += 1
 
     # set the stack index
     entity_stack_index: Score[STD_STACK_RET_SEL, STD_STACK_INDEX_OBJECTIVE] = stack_length
@@ -86,17 +83,11 @@ def pop[stack_nr: int]():
     peek[stack_nr]()
 
     # remove the entity
-
     "kill %s" % (STD_STACK_RET_SEL,)
 
-    # if 1:
-    #     return
-
     # decrement the stack length
-    "scoreboard players remove %s %s 1" % (
-        tag_of_stack_nr[stack_nr](),
-        STD_STACK_OBJECTIVE,
-    )
+    stack_length: Score[tag_of_stack_nr[stack_nr](), STD_STACK_OBJECTIVE]
+    stack_length -= 1
 
 
 def while_test():

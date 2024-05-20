@@ -47,7 +47,7 @@ def transform_whiles(mcfunctions: dict[tuple[str, ...], blocks.Block]) -> dict[t
                                 condition=statement.condition,
                                 true_block=statement.body,
                                 false_block=in_loop_continuation_info.loops[-1].break_,
-                                force_no_redirect_branches=True
+                                no_redirect_branches=True
                             )
                         ]
                     )
@@ -88,7 +88,7 @@ def transform_conditionals(mcfunctions: dict[tuple[str, ...], blocks.Block]) -> 
                 current_child_i += 1
                 current_child.continuation_info.default = None  # this mcfunction ends here
 
-                if node.force_no_redirect_branches:
+                if node.no_redirect_branches:
                     pass
                 else:
                     mcfunctions[node.true_block].continuation_info = (
@@ -106,9 +106,6 @@ def transform_conditionals(mcfunctions: dict[tuple[str, ...], blocks.Block]) -> 
                         node.false_block = (*mcfunction_name, f"{current_child_i}")
 
                 current_child = blocks.Block([], mcfunction.continuation_info)
-
-        # if len(mcfunction_children) == 1:
-        #     breakpoint()
 
         mcfunction_children |= {
             (f"{current_child_i}",): current_child

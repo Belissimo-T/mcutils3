@@ -1,3 +1,5 @@
+import typing
+
 from .stores import *
 from ..errors import issue_warning
 from ..strings import *
@@ -296,43 +298,67 @@ def score_expr_op_in_place(src: ScoreboardStore,
     ]
 
 
-def add_in_place(src: WritableStore[NumberType], increment: ReadableStore[NumberType]) -> list[String]:
+def add_in_place(dst: WritableStore[NumberType], increment: ReadableStore[NumberType]) -> list[String]:
     temp_var = ScoreboardStore("add_in_place_temp", STD_TEMP_OBJECTIVE)
     temp_var2 = ScoreboardStore("add_in_place_temp2", STD_TEMP_OBJECTIVE)
 
     if isinstance(increment, ConstStore):
-        return add_const(src, increment)
+        return add_const(dst, increment)
 
-    if isinstance(src, ScoreboardStore):
+    if isinstance(dst, ScoreboardStore):
         if isinstance(increment, ScoreboardStore):
-            return score_score_op_in_place(src, "+=", increment)
+            return score_score_op_in_place(dst, "+=", increment)
 
         if isinstance(increment, NbtStore):
             if not increment.is_data_type(WholeNumberType):
-                raise CompilationError(f"Cannot add {increment!r} to {src!r}. Increment must be a whole number.")
+                raise CompilationError(f"Cannot add {increment!r} to {dst!r}. Increment must be a whole number.")
 
             return [
                 *var_to_var(increment, temp_var),
-                *score_score_op_in_place(src, "+=", temp_var)
+                *score_score_op_in_place(dst, "+=", temp_var)
             ]
 
-    if isinstance(src, NbtStore):
+    if isinstance(dst, NbtStore):
         if isinstance(increment, ScoreboardStore):
             return [
-                *var_to_var(src, temp_var),
+                *var_to_var(dst, temp_var),
                 *add_in_place(temp_var, increment),
-                *var_to_var(temp_var, src)
+                *var_to_var(temp_var, dst)
             ]
 
         if isinstance(increment, NbtStore):
-            if increment.is_data_type(WholeNumberType) and src.is_data_type(WholeNumberType):
+            if increment.is_data_type(WholeNumberType) and dst.is_data_type(WholeNumberType):
                 return [
                     *var_to_var(increment, temp_var),
-                    *var_to_var(src, temp_var2),
+                    *var_to_var(dst, temp_var2),
                     *score_score_op_in_place(temp_var2, "+=", temp_var),
-                    *var_to_var(temp_var2, src)
+                    *var_to_var(temp_var2, dst)
                 ]
 
-            raise CompilationError(f"Cannot add {increment!r} to {src!r} yet.")
+            raise CompilationError(f"Cannot add {increment!r} to {dst!r} yet.")
 
-    raise CompilationError(f"Cannot add {increment!r} to {src!r}.")
+    raise CompilationError(f"Cannot add {increment!r} to {dst!r}.")
+
+
+def sub_in_place(dst: WritableStore[NumberType], decrement: ReadableStore[NumberType]) -> list[String]:
+    if isinstance(decrement, ConstInt):
+        return add_const(dst, ConstInt(-int(decrement.value)))
+
+    if isinstance(dst, ScoreboardStore):
+        if isinstance(decrement, ScoreboardStore):
+            return score_score_op_in_place(dst, "-=", decrement)
+
+    raise CompilationError(f"Cannot subtract {decrement!r} from {dst!r}.")
+
+
+def op_in_place(
+    dst: WritableStore[NumberType],
+    src: ReadableStore[NumberType],
+    op: typing.Literal["+", "-"]
+) -> list[String]:
+    if op == "+":
+        return add_in_place(dst, src)
+    elif op == "-":
+        return sub_in_place(dst, src)
+    else:
+        raise CompilationError(f"Operation {op!r} is not supported.")

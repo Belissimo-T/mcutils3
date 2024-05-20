@@ -211,7 +211,7 @@ class IfStatement(tree.StoppingStatement):
     condition: tree.Expression
     true_block: tuple[str, ...]
     false_block: tuple[str, ...]
-    force_no_redirect_branches: bool = False
+    no_redirect_branches: bool = False
 
 
 @dataclasses.dataclass

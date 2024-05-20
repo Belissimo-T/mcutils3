@@ -33,6 +33,13 @@ class AssignmentStatement(tree.Statement):
 
 
 @dataclasses.dataclass
+class InPlaceOperationStatement(tree.Statement):
+    src: stores.ReadableStore
+    dst: stores.WritableStore
+    op: str
+
+
+@dataclasses.dataclass
 class ReturnStatement(tree.StoppingStatement):
     value: stores.ReadableStore
 
@@ -85,6 +92,12 @@ def transform_exprs_in_stmts(
                 out.append(AssignmentStatement(
                     src=transform_expr(value, symbols),
                     dst=symbols[target]
+                ))
+            case tree.InPlaceOperationStatement(target=target, value=value, op=op):
+                out.append(InPlaceOperationStatement(
+                    src=transform_expr(value, symbols),
+                    dst=symbols[target],
+                    op=op
                 ))
             case blocks.IfStatement(condition=condition, true_block=true_block, false_block=false_block):
                 out.append(IfStatement(

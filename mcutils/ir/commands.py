@@ -46,7 +46,8 @@ class Function3:
     entry_point: tuple[str, ...] = ()
     symbols: dict[str, stores.WritableStore | stores.ReadableStore] = dataclasses.field(default_factory=dict)
 
-    def process(self, func: blocks.Function2, functions: dict[tuple[str, ...], Function3], std_lib_config: StdLibConfig | None) -> Function3:
+    def process(self, func: blocks.Function2, functions: dict[tuple[str, ...], Function3],
+                std_lib_config: StdLibConfig | None) -> Function3:
         for path, block in func.blocks.items():
             commands = []
 
@@ -80,7 +81,7 @@ class Function3:
                             *stores_conv.var_to_var(std_ret, dst),
                         ]
 
-                # match statement:
+                    # match statement:
                     case blocks_expr.ConditionalBlockCallStatement(condition=condition, true_block=true_block,
                                                                    unless=unless):
                         mcfunction = self.mcfunctions[true_block]
@@ -101,8 +102,13 @@ class Function3:
                         commands.append(
                             strings.LiteralString("function %s", LocationOfString(mcfunction))
                         )
-                    case mcutils.ir.tree.LiteralStatement(strings=strings_):
+                    case tree.LiteralStatement(strings=strings_):
                         commands += strings_
+                    case blocks_expr.InPlaceOperationStatement(src=src, dst=dst, op=op):
+                        commands += stores_conv.op_in_place(
+                            dst=dst, src=src, op=op
+                        )
+
                     case blocks_expr.ReturnStatement(value=value):
                         if value is not None:
                             compile_assert(False, "Not supported")
