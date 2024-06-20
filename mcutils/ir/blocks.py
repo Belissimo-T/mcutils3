@@ -12,12 +12,12 @@ from ..lib import std
 
 @dataclasses.dataclass
 class Namespace2:
-    functions: dict[tuple[str, ...], Function2]
+    functions: dict[tuple[str, ...], BlockedFunction]
 
     @classmethod
     def from_tree_namespace(cls, namespace: tree.File) -> Namespace2:
         return cls({
-            name: Function2.from_tree_function(func, namespace.scope)
+            name: BlockedFunction.from_tree_function(func, namespace.scope)
             for name, func in namespace.functions.items()
         })
 
@@ -26,7 +26,7 @@ _IF_TEMP = std.get_temp_var("conditional")
 
 
 @dataclasses.dataclass
-class Function2:
+class BlockedFunction:
     blocks: dict[tuple[str, ...], Block]
     args: dict[str, tree.VariableType]
     entry_point: tuple[str, ...] = ()
@@ -52,8 +52,8 @@ class Function2:
             if isinstance(statement, tree.IfStatement):
                 stmt = IfStatement(
                     condition=statement.condition,
-                    true_block=cls._find_free(blocks, path, "__if_true"),
-                    false_block=cls._find_free(blocks, path, "__if_false")
+                    true_block=cls._find_free(blocks, path, "_if_true"),
+                    false_block=cls._find_free(blocks, path, "_if_false")
                 )
 
                 b.statements.append(stmt)
@@ -63,7 +63,7 @@ class Function2:
                                   path=stmt.false_block, blocks=blocks)
 
             elif isinstance(statement, tree.WhileLoopStatement):
-                while_path = cls._find_free(blocks, path, "__while")
+                while_path = cls._find_free(blocks, path, "_while")
 
                 stmt = WhileStatement(
                     condition=statement.condition,
@@ -74,18 +74,19 @@ class Function2:
                 cls.process_block(statements=statement.body, continuation_info=continuation_info, path=stmt.body,
                                   blocks=blocks)
             else:
+                compile_assert(not isinstance(statement, tree.NestedStatement))
                 b.statements.append(statement)
 
     @classmethod
-    def from_tree_function(cls, func: tree.Function, scope: tree.Scope) -> Function2:
+    def from_tree_function(cls, func: tree.Function, scope: tree.Scope) -> BlockedFunction:
         out = cls(
-            blocks={("__return",): Block([], ContinuationInfo(return_=None))},
+            blocks={("_return",): Block([], ContinuationInfo(return_=None))},
             args=func.args,
             entry_point=(),
             symbols={}
         )
         cls.process_block(statements=func.statements, blocks=out.blocks,
-                          continuation_info=ContinuationInfo(return_=("__return",)))
+                          continuation_info=ContinuationInfo(return_=("_return",)))
 
         out.symbols = cls.get_symbols(out.blocks.values(), scope.variables | func.scope.variables | out.args)
 
@@ -103,6 +104,7 @@ class Function2:
                     case blocks_expr.ExpressionStatement(expression=expression):
                         new_statements += expressions.fetch(expression, stores.NbtStore("storage", "mcutils", "null"))
                     case blocks_expr.IfStatement(condition=condition, true_block=true_block, false_block=false_block):
+                        # breakpoint()
                         new_statements += [
                             *expressions.fetch(condition, _IF_TEMP),
                             blocks_expr.StackPushStatement(_IF_TEMP),
@@ -122,20 +124,6 @@ class Function2:
                         new_statements.append(statement)
 
             block.statements = new_statements
-
-        # optimization:
-        contains_return = False
-        for block in out.blocks.values():
-            for statement in block.statements:
-                if isinstance(statement, blocks_expr.ConditionalBlockCallStatement):
-                    if statement.true_block == ("__return",):
-                        contains_return = True
-                        break
-            else:
-                continue
-            break
-        if not contains_return:
-            del out.blocks[("__return",)]
 
         return out
 

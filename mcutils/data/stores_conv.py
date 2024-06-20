@@ -50,7 +50,7 @@ NbtStore[list[str]] -> NbtStore[str]:
  - sadly impossible
 """
 
-STD_TEMP_OBJECTIVE = UniqueScoreboardObjective(LiteralString("temp"))
+STD_TEMP_OBJECTIVE = UniqueScoreboardObjective(LiteralString("mcutils_temp"))
 
 
 def score_to_score(src: ScoreboardStore, dst: ScoreboardStore) -> String:
@@ -278,12 +278,12 @@ def add_const(src: WritableStore[NumberType], increment: ConstStore[NumberType])
     raise CompilationError(f"Cannot add {increment!r} to {src!r}.")
 
 
-def score_score_op_in_place(src: ScoreboardStore,
+def score_score_op_in_place(dst: ScoreboardStore,
                             operation: typing.Literal["%=", "*=", "+=", "-=", "/=", "<", "=", ">", "><"],
-                            other: ScoreboardStore
+                            src: ScoreboardStore
                             ) -> list[String]:
     return [
-        LiteralString(f"scoreboard players operation %s %s %s %s %s", *src, operation, *other)
+        LiteralString(f"scoreboard players operation %s %s %s %s %s", *dst, operation, *src)
     ]
 
 
@@ -351,14 +351,54 @@ def sub_in_place(dst: WritableStore[NumberType], decrement: ReadableStore[Number
     raise CompilationError(f"Cannot subtract {decrement!r} from {dst!r}.")
 
 
+def mul_const(dst: WritableStore[NumberType], factor: ConstStore[NumberType]) -> list[String]:
+    if isinstance(dst, ScoreboardStore):
+        return score_expr_op_in_place(dst, "*=", factor)
+
+    raise CompilationError(f"Cannot multiply {dst!r} by {factor!r}.")
+
+
+def mul_in_place(dst: WritableStore[NumberType], factor: ReadableStore[NumberType]) -> list[String]:
+    if isinstance(factor, ConstStore):
+        return mul_const(dst, factor)
+
+    if isinstance(dst, ScoreboardStore):
+        if isinstance(factor, ScoreboardStore):
+            return score_score_op_in_place(dst, "*=", factor)
+
+    raise CompilationError(f"Cannot multiply {factor!r} with {dst!r}.")
+
+
+def div_const(dst: WritableStore[NumberType], divisor: ConstStore[NumberType]) -> list[String]:
+    if isinstance(dst, ScoreboardStore):
+        return score_expr_op_in_place(dst, "/=", divisor)
+
+    raise CompilationError(f"Cannot divide {dst!r} by {divisor!r}.")
+
+
+def div_in_place(dst: WritableStore[NumberType], divisor: ReadableStore[NumberType]) -> list[String]:
+    if isinstance(divisor, ConstStore):
+        return div_const(dst, divisor)
+
+    if isinstance(dst, ScoreboardStore):
+        if isinstance(divisor, ScoreboardStore):
+            return score_score_op_in_place(dst, "/=", divisor)
+
+    raise CompilationError(f"Cannot divide {dst!r} by {divisor!r}.")
+
+
 def op_in_place(
     dst: WritableStore[NumberType],
     src: ReadableStore[NumberType],
-    op: typing.Literal["+", "-"]
+    op: typing.Literal["+", "-", "*", "/"]
 ) -> list[String]:
     if op == "+":
         return add_in_place(dst, src)
     elif op == "-":
         return sub_in_place(dst, src)
+    elif op == "*":
+        return mul_in_place(dst, src)
+    elif op == "/":
+        return div_in_place(dst, src)
     else:
-        raise CompilationError(f"Operation {op!r} is not supported.")
+        raise CompilationError(f"Unsupported operation {op!r}.")

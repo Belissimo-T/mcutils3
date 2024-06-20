@@ -46,7 +46,7 @@ class Function3:
     entry_point: tuple[str, ...] = ()
     symbols: dict[str, stores.WritableStore | stores.ReadableStore] = dataclasses.field(default_factory=dict)
 
-    def process(self, func: blocks.Function2, functions: dict[tuple[str, ...], Function3],
+    def process(self, func: blocks.BlockedFunction, functions: dict[tuple[str, ...], Function3],
                 std_lib_config: StdLibConfig | None) -> Function3:
         for path, block in func.blocks.items():
             commands = []
@@ -109,10 +109,7 @@ class Function3:
                             dst=dst, src=src, op=op
                         )
 
-                    case blocks_expr.ReturnStatement(value=value):
-                        if value is not None:
-                            compile_assert(False, "Not supported")
-                            commands += stores_conv.var_to_var(value, std.STD_RET)
+
                     case tree.CommentStatement(message=msg):
                         commands.append(strings.Comment(msg))
                     case _:
@@ -122,7 +119,7 @@ class Function3:
 
         ...
 
-    def preprocess(self, func: blocks.Function2):
+    def preprocess(self, func: blocks.BlockedFunction):
         mcfunctions = {path: McFunction([]) for path in func.blocks}
 
         self.mcfunctions = mcfunctions

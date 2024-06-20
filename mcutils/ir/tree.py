@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+
 import ast_comments as ast
 import dataclasses
 import typing
@@ -58,19 +60,26 @@ class Scope:
 
 
 def compile_time_args_to_str(args: tuple) -> str:
-    match args:
-        case [int(a)]:
-            return str(a)
-        case []:
-            return "0"
-        case [strings.String() as s]:
-            return f"string_{s._id}"
-        case [ScoreType() as v]:
-            return f"score_{v.player._id if v.player else 'no_player'}_{v.objective._id if v.objective else 'no_objective'}"
-        case [str(s)]:
-            return s
-        case _:
-            breakpoint()
+    if not args:
+        return "0"
+
+    outs = []
+    for arg in args:
+        match arg:
+            case int(a):
+                outs.append(str(a))
+            case strings.String() as s:
+                outs.append(f"string_{s._id}")
+            case ScoreType() as v:
+                outs.append(
+                    f"score_{v.player._id if v.player else 'no_player'}_{v.objective._id if v.objective else 'no_objective'}"
+                )
+            case str(s):
+                outs.append(base64.b32encode(s.encode()).decode().lower().replace("=", "_"))
+            case _:
+                breakpoint()
+
+    return "_".join(outs)
 
 
 @dataclasses.dataclass
@@ -128,9 +137,12 @@ class File:
             if func_path in self.functions:
                 continue
 
+            ctime_arg_names = func_template.get_compile_time_args()
+            compile_assert(len(ctime_arg_names) == len(args), "Missing compile time args.")
+
             scope = Scope(
                 parent_scope=self.scope,
-                compile_time_args=dict(zip(func_template.get_compile_time_args(), args)),
+                compile_time_args=dict(zip(ctime_arg_names, args)),
                 compile_function_template=lambda x, y: stack.append((x, y))
             )
 
@@ -187,7 +199,11 @@ def expression_factory(node: ast.expr, context: Scope) -> Expression:
         case ast.Constant(value=value):
             return ConstantExpression(value)
         case ast.Name(id=id):
-            return SymbolExpression(id)
+            try:
+                a = context.get(id, "compile_time_arg")
+                raise CompilationError(f"Currently not supported :((")
+            except KeyError:
+                return SymbolExpression(id)
         case _:
             raise CompilationError(f"Invalid expression {node!r}")
 
@@ -272,7 +288,8 @@ class Function:
 
     @classmethod
     def from_py_ast(cls, node: ast.FunctionDef, scope: Scope):
-        scope = Scope(parent_scope=scope)
+        args = {arg.arg: annotation_to_datatype(arg.annotation, scope) for arg in node.args.args}
+        scope = Scope(parent_scope=scope, variables=args.copy())
         statements = []
 
         for stmt in node.body:
@@ -286,7 +303,7 @@ class Function:
 
         return cls(
             statements=statements,
-            args={arg.arg: annotation_to_datatype(arg.annotation, scope) for arg in node.args.args},
+            args=args,
             scope=scope
         )
 
@@ -382,13 +399,23 @@ class FunctionCallExpression(Expression):
     def from_py_ast(cls, node: ast.Call, scope: Scope):
         match node.func:
             case ast.Subscript(value=ast.Name(id=name), slice=s):
+                compile_time_args = []
                 match s:
-                    case ast.Constant(value=val):
-                        compile_time_args = val,
-                    case ast.Name(id=n):
-                        compile_time_args = scope.get(n, ("compile_time_arg", "string", "variable")),
+                    case ast.Tuple(elts=elts):
+                        pass
                     case _:
-                        raise CompilationError(f"Unsupported compile time args {s!r}.")
+                        elts = [s]
+
+                for el in elts:
+                    match el:
+                        case ast.Constant(value=val):
+                            compile_time_args.append(val)
+                        case ast.Name(id=n):
+                            compile_time_args.append(scope.get(n, ("compile_time_arg", "string", "variable")))
+                        case _:
+                            raise CompilationError(f"Unsupported compile time args {s!r}.")
+
+                compile_time_args = tuple(compile_time_args)
             case ast.Name(id=name):
                 compile_time_args = ()
             case _:

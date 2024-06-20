@@ -37,7 +37,7 @@ def fetch(
             ]
 
         temp_vars = tuple(get_temp_var(i).with_dtype(arg.dtype_obj) for i, arg in enumerate(src.args))
-        for var in temp_vars:
+        for var in reversed(temp_vars):
             out.append(blocks_expr.StackPopStatement(var))
 
         out += src.fetch_to(tuple(temp_vars), dst)
@@ -68,6 +68,7 @@ class BinOpExpression(Expression):
 
     _TEMP1: typing.ClassVar = std.get_temp_var("expr_temp1")
     _TEMP2: typing.ClassVar = std.get_temp_var("expr_temp2")
+    _TEMP3: typing.ClassVar = std.get_temp_var("expr_temp3")
 
     @property
     def args(self):
@@ -75,9 +76,9 @@ class BinOpExpression(Expression):
 
     def fetch_to(self, args: tuple[stores.PrimitiveStore, ...], target: stores.PrimitiveStore) -> list[tree.Statement]:
         left, right = args
-        if self.op == "+":
+        if self.op in ("+", "-", "*", "/"):
             return [
-                mcutils.ir.tree.LiteralStatement(stores_conv.add_in_place(left, right)),
+                mcutils.ir.tree.LiteralStatement(stores_conv.op_in_place(left, right, self.op)),
                 mcutils.ir.tree.LiteralStatement(stores_conv.var_to_var(left, target)),
             ]
         elif self.op in ("<", "<=", ">", ">=", "=="):
@@ -88,13 +89,27 @@ class BinOpExpression(Expression):
             return [
                 mcutils.ir.tree.LiteralStatement(stores_conv.var_to_var(left, self._TEMP1)),
                 mcutils.ir.tree.LiteralStatement(stores_conv.var_to_var(right, self._TEMP2)),
+                mcutils.ir.tree.LiteralStatement(stores_conv.var_to_var(stores.ConstInt(0), self._TEMP3)),
                 mcutils.ir.tree.LiteralStatement([
                     strings.LiteralString(
                         f"execute if score %s %s {op} %s %s run scoreboard players set %s %s 1",
-                        *self._TEMP1, *self._TEMP2, *self._TEMP1
+                        *self._TEMP1, *self._TEMP2, *self._TEMP3
                     )
                 ]),
-                mcutils.ir.tree.LiteralStatement(stores_conv.var_to_var(self._TEMP1, target)),
+                mcutils.ir.tree.LiteralStatement(stores_conv.var_to_var(self._TEMP3, target)),
+            ]
+        elif self.op == "!=":
+            return [
+                mcutils.ir.tree.LiteralStatement(stores_conv.var_to_var(left, self._TEMP1)),
+                mcutils.ir.tree.LiteralStatement(stores_conv.var_to_var(right, self._TEMP2)),
+                mcutils.ir.tree.LiteralStatement(stores_conv.var_to_var(stores.ConstInt(1), self._TEMP3)),
+                mcutils.ir.tree.LiteralStatement([
+                    strings.LiteralString(
+                        f"execute if score %s %s = %s %s run scoreboard players set %s %s 0",
+                        *self._TEMP1, *self._TEMP2, *self._TEMP3
+                    )
+                ]),
+                mcutils.ir.tree.LiteralStatement(stores_conv.var_to_var(self._TEMP3, target)),
             ]
         elif self.op == "%":
             return [

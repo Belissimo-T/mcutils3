@@ -11,25 +11,25 @@ STD_STACK_RET_TAG: Tag["stack_ret"]
 STD_STACK_RET_SEL = "@e[tag=%s, limit=1]" % (STD_STACK_RET_TAG,)
 
 
-def add_scoreboard_objective[name]():
+def scoreboard_add_objective[name]():
     "scoreboard objectives add %s dummy" % (name,)
 
 
-def print[variable]():
-    'tellraw @p {"score":{"name":"%s","objective":"%s"}}' % (
+def print[msg, variable]():
+    'tellraw @p ["%s", {"score":{"name":"%s","objective":"%s"}}]' % (
+        msg,
         get_player[variable](),
         get_objective[variable](),
     )
 
 
 def load():
-    # create the stack objective
-
-    add_scoreboard_objective[STD_STACK_INDEX_OBJECTIVE]()
-    add_scoreboard_objective[STD_STACK_VALUE_OBJECTIVE]()
-    add_scoreboard_objective[STD_STACK_OBJECTIVE]()
-    add_scoreboard_objective[STD_OBJECTIVE]()
-    add_scoreboard_objective["mcutils_std"]()
+    scoreboard_add_objective[STD_STACK_INDEX_OBJECTIVE]()
+    scoreboard_add_objective[STD_STACK_VALUE_OBJECTIVE]()
+    scoreboard_add_objective[STD_STACK_OBJECTIVE]()
+    scoreboard_add_objective[STD_OBJECTIVE]()
+    scoreboard_add_objective["mcutils_std"]()
+    scoreboard_add_objective["mcutils_temp"]()
 
     "say * Loaded stack library!"
 
@@ -93,12 +93,31 @@ def pop[stack_nr: int]():
 
 
 def while_test():
-    a: Score["a", STD_OBJECTIVE] = 10
+    a: Score["a", STD_OBJECTIVE] = 1
 
-    while a:
-        "say While Iteration!"
-        print[a]()
-        a -= 1
+    while a < 1048577:
+        # "say While Iteration!"
+        print["a = ", a]()
+        a *= 2
+        # print["a2 = ", a]()
+
+    "say after!"
+
+
+def sum(a: Score["a", STD_OBJECTIVE], b: Score["a", STD_OBJECTIVE]):
+    print["a = ", a]()
+    print["b = ", b]()
+    STD_ARG = a + b
+    print["stdarg = ", STD_ARG]()
+    push[2]()
+
+
+def sum_test():
+    sum(1 + 2)
+    pop[2]()
+    c: Score["c", STD_OBJECTIVE] = STD_RET
+
+    print["c = ", c]()
 
 
 def main():
@@ -107,19 +126,69 @@ def main():
     STD_RET = 0
 
     STD_ARG = 42
-    print[STD_ARG]()
+    print["arg=", STD_ARG]()
     push[1]()
 
     STD_ARG = 43
-    print[STD_ARG]()
+    print["arg=", STD_ARG]()
     push[1]()
 
     # peek[1]()
     pop[1]()
-    print[STD_RET]()
+    print["ret=", STD_RET]()
 
     pop[1]()
-    print[STD_RET]()
-
+    print["ret=", STD_RET]()
 
     while_test()
+    sum_test()
+    fizz_buzz()
+    collatz()
+    find_score_overflow()
+
+
+def fizz_buzz():
+    i: Score["i", STD_OBJECTIVE] = 1
+    div_3: Score
+    div_5: Score
+
+    while i <= 100:
+        print["i=", i]()
+
+        div_3 = i % 3 == 0
+        div_5 = i % 5 == 0
+
+        if div_3 and div_5:
+            "say FizzBuzz"
+        elif div_3:
+            "say Fizz"
+        elif div_5:
+            "say Buzz"
+
+        i += 1
+
+
+def collatz():
+    n: Score["n", STD_OBJECTIVE] = 237894234
+
+    while n != 1:
+        print["n = ", n]()
+        if n % 2 == 0:
+            n /= 2
+        else:
+            n *= 3
+            n += 1
+
+    print["n = ", n]()
+
+
+def find_score_overflow():
+    a: Score["a", STD_OBJECTIVE] = 1
+
+    while a > 0:
+        a *= 2
+        print["a = ", a]()
+
+    a -= 1
+    print["a-1 = ", a]()
+    # print["a = ", a]()
