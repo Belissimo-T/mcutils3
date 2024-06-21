@@ -141,6 +141,9 @@ class ScoreboardStore(PrimitiveStore[IntType]):
     def __eq__(self, other):
         return self.player == other.player and self.objective == other.objective
 
+    def __hash__(self):
+        return hash((self.player, self.objective))
+
     def __iter__(self):
         yield self.player
         yield self.objective

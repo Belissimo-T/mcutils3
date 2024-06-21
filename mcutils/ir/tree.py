@@ -20,7 +20,7 @@ class Scope:
     pyfuncs: dict[str, typing.Callable] = dataclasses.field(default_factory=dict)
     compile_time_args: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
 
-    compile_function_template: typing.Callable[[str, tuple], None] | None = None
+    compile_function_template: typing.Callable[[tuple[str, ...], tuple], None] | None = None
 
     _ALLOWED_TYPES = typing.Literal["variable", "string", "pyfunc", "compile_time_arg"]
 
@@ -58,6 +58,21 @@ class Scope:
         else:
             raise CompilationError("No compile time function template found.")
 
+    def collapse(self) -> Scope:
+        if self.parent_scope is None:
+            return self
+
+        parent = self.parent_scope.collapse()
+
+        return Scope(
+            parent_scope=parent,
+            variables={**parent.variables, **self.variables},
+            strings={**parent.strings, **self.strings},
+            pyfuncs={**parent.pyfuncs, **self.pyfuncs},
+            compile_time_args={**parent.compile_time_args, **self.compile_time_args},
+            compile_function_template=self.compile_function_template or parent.compile_function_template
+        )
+
 
 def compile_time_args_to_str(args: tuple) -> str:
     if not args:
@@ -70,7 +85,7 @@ def compile_time_args_to_str(args: tuple) -> str:
                 outs.append(str(a))
             case strings.String() as s:
                 outs.append(f"string_{s._id}")
-            case ScoreType() as v:
+            case stores.ScoreboardStore() as v:
                 outs.append(
                     f"score_{v.player._id if v.player else 'no_player'}_{v.objective._id if v.objective else 'no_objective'}"
                 )
@@ -84,8 +99,7 @@ def compile_time_args_to_str(args: tuple) -> str:
 
 @dataclasses.dataclass
 class File:
-    function_templates: dict[str, FunctionTemplate]
-    functions: dict[tuple[str, ...], Function]
+    function_templates: dict[tuple[str, ...], FunctionTemplate]
     scope: Scope
 
     @classmethod
@@ -97,7 +111,7 @@ class File:
         for stmt in node.body:
             match stmt:
                 case ast.FunctionDef(name=name):
-                    function_templates[name] = FunctionTemplate(node=stmt)
+                    function_templates[name,] = FunctionTemplate(node=stmt)
 
                 case ast.AnnAssign(target=ast.Name(id=name),
                                    annotation=ast.Subscript(value=ast.Name(id="ScoreboardObjective"), slice=s)):
@@ -119,36 +133,8 @@ class File:
                 case _:
                     raise CompilationError(f"Invalid statement {stmt!r} in namespace {ast!r}")
 
-        return cls(function_templates, {}, scope)
+        return cls(function_templates, scope)
 
-    def resolve_templates(self, start: list[str]):
-        stack: list[tuple[str, tuple]] = [(name, ()) for name in start]
-
-        while stack:
-            func_name, args = stack.pop()
-
-            try:
-                func_template = self.function_templates[func_name]
-            except KeyError:
-                raise CompilationError(f"Undefined function {func_name!r}")
-
-            func_path = (func_name, compile_time_args_to_str(args))
-
-            if func_path in self.functions:
-                continue
-
-            ctime_arg_names = func_template.get_compile_time_args()
-            compile_assert(len(ctime_arg_names) == len(args), "Missing compile time args.")
-
-            scope = Scope(
-                parent_scope=self.scope,
-                compile_time_args=dict(zip(ctime_arg_names, args)),
-                compile_function_template=lambda x, y: stack.append((x, y))
-            )
-
-            self.functions[func_path] = Function.from_py_ast(
-                func_template.node, scope
-            )
 
 
 def statement_factory(node: ast.stmt, context: Scope) -> Statement:
@@ -393,6 +379,7 @@ def op_to_str(op):
 @dataclasses.dataclass
 class FunctionCallExpression(Expression):
     function: tuple[str, ...]
+    compile_time_args: tuple[ast.Constant | ast.Name, ...]
     args: list[Expression]
 
     @classmethod
@@ -408,10 +395,8 @@ class FunctionCallExpression(Expression):
 
                 for el in elts:
                     match el:
-                        case ast.Constant(value=val):
-                            compile_time_args.append(val)
-                        case ast.Name(id=n):
-                            compile_time_args.append(scope.get(n, ("compile_time_arg", "string", "variable")))
+                        case ast.Constant() | ast.Name():
+                            compile_time_args.append(el)
                         case _:
                             raise CompilationError(f"Unsupported compile time args {s!r}.")
 
@@ -421,12 +406,10 @@ class FunctionCallExpression(Expression):
             case _:
                 raise CompilationError(f"Invalid function {node.func!r}.")
 
-        scope.get_compile_time_function_template()(name, compile_time_args)
-
-        compile_time_args_str = compile_time_args_to_str(compile_time_args)
-
+        # breakpoint()
         return cls(
-            function=(name, compile_time_args_str),
+            function=(name, ),
+            compile_time_args=compile_time_args,
             args=[expression_factory(arg, scope) for arg in node.args],
         )
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import abc
+import ast
 import dataclasses
 import typing
 
@@ -147,11 +148,12 @@ class BinOpExpression(Expression):
 class FunctionCallExpression(Expression):
     function: tuple[str, ...]
     args: tuple[stores.ReadableStore, ...]
+    compile_time_args: tuple[ast.Constant | ast.Name, ...]
 
     def fetch_to(self, args: tuple[stores.PrimitiveStore, ...], target: stores.PrimitiveStore) -> list[tree.Statement]:
         return [
             *[blocks_expr.StackPushStatement(arg) for arg in args],
-            blocks.FunctionCallStatement(self.function)
+            blocks.FunctionCallStatement(self.function, self.compile_time_args),
         ]
 
     @property

@@ -42,12 +42,6 @@ class String(abc.ABC):
     ) -> tuple[str, str]:
         ...
 
-    def __hash__(self):
-        return hash((self._id, self.__class__.__name__))
-
-    def __eq__(self, other):
-        return self._id == other._id
-
 
 class LiteralString(String):
     def __init__(self, literal: str, *args: String | str):
@@ -70,6 +64,14 @@ class LiteralString(String):
         except (TypeError, ValueError) as e:
             raise CompilationError(f"Command {self.literal!r} has {len(self.args)} args.") from e
 
+    def __hash__(self):
+        return hash((self.literal, self.args, self.__class__.__name__))
+
+    def __eq__(self, other):
+        if not isinstance(other, self.__class__):
+            return False
+        return self.literal == other.literal and self.args == other.args
+
 
 @dataclasses.dataclass(frozen=True)
 class _Counter:
@@ -88,6 +90,7 @@ class UniqueString(String, abc.ABC):
 
     def __post_init__(self):
         String.__init__(self)
+        # breakpoint()
 
     def get_str(
         self,
@@ -101,6 +104,14 @@ class UniqueString(String, abc.ABC):
 
             if new_val not in existing_strings[self.category]:
                 return new_val, self.category
+
+    def __hash__(self):
+        return hash((self._id, self.__class__.__name__))
+
+    def __eq__(self, other):
+        if not isinstance(other, self.__class__):
+            return False
+        return self._id == other._id
 
 
 @dataclasses.dataclass(frozen=True)

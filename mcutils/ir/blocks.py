@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import dataclasses
 import typing
 
@@ -10,16 +11,6 @@ from ..errors import CompilationError, compile_assert
 from ..lib import std
 
 
-@dataclasses.dataclass
-class Namespace2:
-    functions: dict[tuple[str, ...], BlockedFunction]
-
-    @classmethod
-    def from_tree_namespace(cls, namespace: tree.File) -> Namespace2:
-        return cls({
-            name: BlockedFunction.from_tree_function(func, namespace.scope)
-            for name, func in namespace.functions.items()
-        })
 
 
 _IF_TEMP = std.get_temp_var("conditional")
@@ -52,8 +43,8 @@ class BlockedFunction:
             if isinstance(statement, tree.IfStatement):
                 stmt = IfStatement(
                     condition=statement.condition,
-                    true_block=cls._find_free(blocks, path, "_if_true"),
-                    false_block=cls._find_free(blocks, path, "_if_false")
+                    true_block=cls._find_free(blocks, path, "__if_true"),
+                    false_block=cls._find_free(blocks, path, "__if_false")
                 )
 
                 b.statements.append(stmt)
@@ -63,7 +54,7 @@ class BlockedFunction:
                                   path=stmt.false_block, blocks=blocks)
 
             elif isinstance(statement, tree.WhileLoopStatement):
-                while_path = cls._find_free(blocks, path, "_while")
+                while_path = cls._find_free(blocks, path, "__while")
 
                 stmt = WhileStatement(
                     condition=statement.condition,
@@ -80,15 +71,15 @@ class BlockedFunction:
     @classmethod
     def from_tree_function(cls, func: tree.Function, scope: tree.Scope) -> BlockedFunction:
         out = cls(
-            blocks={("_return",): Block([], ContinuationInfo(return_=None))},
+            blocks={("__return",): Block([], ContinuationInfo(return_=None))},
             args=func.args,
             entry_point=(),
             symbols={}
         )
         cls.process_block(statements=func.statements, blocks=out.blocks,
-                          continuation_info=ContinuationInfo(return_=("_return",)))
+                          continuation_info=ContinuationInfo(return_=("__return",)))
 
-        out.symbols = cls.get_symbols(out.blocks.values(), scope.variables | func.scope.variables | out.args)
+        out.symbols = cls.get_symbols(out.blocks.values(), scope.variables | func.scope.collapse().variables | out.args)
 
         out.blocks = compile_control_flow.transform_all(out.blocks)
 
@@ -216,5 +207,4 @@ class BlockCallStatement(tree.StoppingStatement):
 @dataclasses.dataclass
 class FunctionCallStatement(tree.Statement):
     function: tuple[str, ...]
-
-
+    compile_time_args: tuple[ast.Constant | ast.Name, ...]

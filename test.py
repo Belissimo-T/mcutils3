@@ -10,13 +10,12 @@ def main():
     py_lib = stack.Library()
 
     a = tree.File.from_py_ast(
-        ast.parse(pathlib.Path("mcutils/lib/std2/stack.mc.py").read_text()),
+        ast.parse(pathlib.Path("mcutils/lib/std2/stack.mc.py").read_text("utf-8")),
         py_library=py_lib
     )
 
-    a.resolve_templates(["main"])
+    b = commands.CompileNamespace.from_tree_namespace(a)
 
-    b = blocks.Namespace2.from_tree_namespace(a)
 
     std_lib_config = commands.StdLibConfig(
         stack_push=("push", "1"),
@@ -24,8 +23,11 @@ def main():
         stack_peek=("peek", "1"),
     )
 
-    c = commands.Namespace3.from_namespace2(b, std_lib_config=std_lib_config)
-    d = datapack.Datapack("test", {"test": c})
+    b.resolve_templates(["main"], std_lib_config)
+
+    breakpoint()
+
+    d = datapack.Datapack("test", {"test": b})
     d.export(pathlib.Path("testout").absolute())
 
 

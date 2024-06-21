@@ -146,6 +146,8 @@ def main():
     collatz()
     find_score_overflow()
 
+    a[1]()
+
 
 def fizz_buzz():
     i: Score["i", STD_OBJECTIVE] = 1
@@ -169,7 +171,7 @@ def fizz_buzz():
 
 
 def collatz():
-    n: Score["n", STD_OBJECTIVE] = 237894234
+    n: Score = 237894234
 
     while n != 1:
         print["n = ", n]()
@@ -183,7 +185,7 @@ def collatz():
 
 
 def find_score_overflow():
-    a: Score["a", STD_OBJECTIVE] = 1
+    a: Score = 1
 
     while a > 0:
         a *= 2
@@ -192,3 +194,4 @@ def find_score_overflow():
     a -= 1
     print["a-1 = ", a]()
     # print["a = ", a]()
+
