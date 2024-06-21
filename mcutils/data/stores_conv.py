@@ -287,14 +287,14 @@ def score_score_op_in_place(dst: ScoreboardStore,
     ]
 
 
-def score_expr_op_in_place(src: ScoreboardStore,
+def score_expr_op_in_place(dst: ScoreboardStore,
                            operation: typing.Literal["%=", "*=", "+=", "-=", "/=", "<", "=", ">", "><"],
                            other: ReadableStore[NumberType]) -> list[String]:
     temp_var = ScoreboardStore("score_expr_op_in_place_temp", STD_TEMP_OBJECTIVE)
 
     return [
         *var_to_var(other, temp_var),
-        *score_score_op_in_place(src, operation, temp_var)
+        *score_score_op_in_place(dst, operation, temp_var)
     ]
 
 
@@ -392,6 +392,14 @@ def op_in_place(
     src: ReadableStore[NumberType],
     op: typing.Literal["+", "-", "*", "/"]
 ) -> list[String]:
+    if src.is_data_type(WholeNumberType) and dst.is_data_type(WholeNumberType):
+        temp_var = ScoreboardStore("op_in_place_score_tmp", STD_TEMP_OBJECTIVE)
+        return [
+            *var_to_var(dst, temp_var),
+            *score_expr_op_in_place(temp_var, op + "=", src),
+            *var_to_var(temp_var, dst)
+        ]
+
     if op == "+":
         return add_in_place(dst, src)
     elif op == "-":

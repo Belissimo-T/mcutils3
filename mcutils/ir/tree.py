@@ -136,7 +136,6 @@ class File:
         return cls(function_templates, scope)
 
 
-
 def statement_factory(node: ast.stmt, context: Scope) -> Statement:
     match node:
         case ast.Expr(value=ast.BinOp(left=ast.Constant(value=val), op=ast.Mod(), right=ast.Tuple(elts=elts))):
@@ -267,7 +266,7 @@ class FunctionTemplate:
 
 
 @dataclasses.dataclass
-class Function:
+class TreeFunction:
     statements: list[Statement]
     args: dict[str, VariableType]
     scope: Scope
@@ -408,7 +407,7 @@ class FunctionCallExpression(Expression):
 
         # breakpoint()
         return cls(
-            function=(name, ),
+            function=(name,),
             compile_time_args=compile_time_args,
             args=[expression_factory(arg, scope) for arg in node.args],
         )

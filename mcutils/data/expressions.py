@@ -27,7 +27,7 @@ def get_temp_var(i: int) -> stores.NbtStore[stores.AnyDataType]:
 
 def fetch(
     src: stores.ReadableStore,
-    dst: stores.PrimitiveStore
+    dst: stores.PrimitiveStore | None
 ) -> list[tree.Statement]:
     if isinstance(src, Expression):
         out = []
@@ -45,7 +45,8 @@ def fetch(
 
         return out
     else:
-        return [mcutils.ir.tree.LiteralStatement(stores_conv.var_to_var(src, dst))]
+        if dst is not None:
+            return [blocks_expr.SimpleAssignmentStatement(src, dst)]
 
 
 class Expression(stores.ReadableStore):
@@ -144,17 +145,25 @@ class BinOpExpression(Expression):
         return stores.AnyDataType
 
 
+def get_var_of_arg_i(i: int) -> stores.WritableStore:
+    return stores.NbtStore("storage", "mcutils:expr_temp", f"arg_{i}")
+
+
+RET_VALUE = stores.NbtStore("storage", "mcutils:expr_temp", "ret_value")
+
+
 @dataclasses.dataclass
 class FunctionCallExpression(Expression):
     function: tuple[str, ...]
     args: tuple[stores.ReadableStore, ...]
     compile_time_args: tuple[ast.Constant | ast.Name, ...]
 
-    def fetch_to(self, args: tuple[stores.PrimitiveStore, ...], target: stores.PrimitiveStore) -> list[tree.Statement]:
+    def fetch_to(self, args: tuple[stores.PrimitiveStore, ...], target: stores.PrimitiveStore | None) -> list[
+        tree.Statement]:
         return [
-            *[blocks_expr.StackPushStatement(arg) for arg in args],
-            blocks.FunctionCallStatement(self.function, self.compile_time_args),
-        ]
+            *[blocks_expr.SimpleAssignmentStatement(src, get_var_of_arg_i(i)) for i, src in enumerate(self.args)],
+            blocks.FunctionCallStatementUnresolvedCtArgs(self.function, self.compile_time_args),
+        ] + ([blocks_expr.SimpleAssignmentStatement(RET_VALUE, target)] if target is not None else [])
 
     @property
     def dtype_obj(self) -> typing.Type[stores.DataType]:

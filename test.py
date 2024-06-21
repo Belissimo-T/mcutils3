@@ -16,16 +16,13 @@ def main():
 
     b = commands.CompileNamespace.from_tree_namespace(a)
 
-
     std_lib_config = commands.StdLibConfig(
-        stack_push=("push", "1"),
-        stack_pop=("pop", "1"),
-        stack_peek=("peek", "1"),
+        stack_push=(("push", ), (1, )),
+        stack_pop=(("pop", ), (1, )),
+        stack_peek=(("peek", ), (1, )),
     )
 
     b.resolve_templates(["main"], std_lib_config)
-
-    breakpoint()
 
     d = datapack.Datapack("test", {"test": b})
     d.export(pathlib.Path("testout").absolute())

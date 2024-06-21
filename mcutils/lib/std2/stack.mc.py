@@ -11,6 +11,14 @@ STD_STACK_RET_TAG: Tag["stack_ret"]
 STD_STACK_RET_SEL = "@e[tag=%s, limit=1]" % (STD_STACK_RET_TAG,)
 
 
+def gamerule[rule, value]():
+    "gamerule %s %s" % (rule, value)
+
+
+def gamerule_max_command_chain_length[value]():
+    gamerule["maxCommandChainLength", value]()
+
+
 def scoreboard_add_objective[name]():
     "scoreboard objectives add %s dummy" % (name,)
 
@@ -20,6 +28,17 @@ def print[msg, variable]():
         msg,
         get_player[variable](),
         get_objective[variable](),
+    )
+
+
+def print2[msg, variable, msg2, variable2]():
+    'tellraw @p ["%s", {"score":{"name":"%s","objective":"%s"}}," %s ", {"score":{"name":"%s","objective":"%s"}}]' % (
+        msg,
+        get_player[variable](),
+        get_objective[variable](),
+        msg2,
+        get_player[variable2](),
+        get_objective[variable2](),
     )
 
 
@@ -93,7 +112,7 @@ def pop[stack_nr: int]():
 
 
 def while_test():
-    a: Score["a", STD_OBJECTIVE] = 1
+    a = 1
 
     while a < 1048577:
         # "say While Iteration!"
@@ -104,25 +123,54 @@ def while_test():
     "say after!"
 
 
-def sum(a: Score["a", STD_OBJECTIVE], b: Score["a", STD_OBJECTIVE]):
+def sum(a: Score, b: Score):
+    pop[1]()
+    a = STD_RET
+    pop[1]()
+    b = STD_RET
+
     print["a = ", a]()
     print["b = ", b]()
-    STD_ARG = a + b
-    print["stdarg = ", STD_ARG]()
-    push[2]()
+    c: Score = a + b
+    print["a + b = c = ", c]()
+    return c
 
 
 def sum_test():
-    sum(1 + 2)
-    pop[2]()
-    c: Score["c", STD_OBJECTIVE] = STD_RET
+    c: Score = sum(1, 2)
 
     print["c = ", c]()
 
+#
+# def fib(n: Score):
+#     print["Starting fib with n = ", n]()
+#     fib_nm1: Score
+#     fib_nm2: Score
+#     fib_nm0: Score
+#
+#     if n == 1:
+#         return 1
+#     elif n == 2:
+#         return 1
+#     else:
+#         fib_nm1 = fib(n - 1)
+#         fib_nm2 = fib(n - 2)
+#         fib_nm0 = fib_nm1 + fib_nm2
+#         return fib_nm0
+#
+#
+# def fib_test():
+#     n: Score = 1
+#     fib_n: Score
+#
+#     while n < 3:
+#         fib_n = fib(n)
+#
+#         print2["fib(", n, ") = ", fib_n]()
+#         n += 1
 
-def main():
-    load()
 
+def stack_test():
     STD_RET = 0
 
     STD_ARG = 42
@@ -140,17 +188,22 @@ def main():
     pop[1]()
     print["ret=", STD_RET]()
 
-    while_test()
+
+def main():
+    load()
+
+    # while_test()
     sum_test()
     fizz_buzz()
     collatz()
     find_score_overflow()
+    # fib_test()
 
-    a[1]()
+    # a[1]()
 
 
 def fizz_buzz():
-    i: Score["i", STD_OBJECTIVE] = 1
+    i: Score = 1
     div_3: Score
     div_5: Score
 
@@ -194,4 +247,3 @@ def find_score_overflow():
     a -= 1
     print["a-1 = ", a]()
     # print["a = ", a]()
-

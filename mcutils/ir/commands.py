@@ -17,7 +17,7 @@ from ..location import Location
 class CompileNamespace:
     function_templates: dict[tuple[str, ...], tree.FunctionTemplate]
     scope: tree.Scope
-    tree_functions: dict[tuple[str, ...], tree.Function] = dataclasses.field(default_factory=dict)
+    tree_functions: dict[tuple[str, ...], tree.TreeFunction] = dataclasses.field(default_factory=dict)
     blocked_functions: dict[tuple[str, ...], blocks.BlockedFunction] = dataclasses.field(default_factory=dict)
     command_functions: dict[tuple[str, ...], CommandFunction] = dataclasses.field(default_factory=dict)
 
@@ -29,7 +29,10 @@ class CompileNamespace:
         )
 
     def resolve_templates(self, start: list[str], std_lib_config: StdLibConfig | None = None):
-        stack: list[tuple[tuple[str, ...], tuple]] = [((name,), ()) for name in start]
+        stack: list[tuple[tuple[str, ...], tuple]] = (
+            [std_lib_config.stack_peek, std_lib_config.stack_pop, std_lib_config.stack_push]
+            + [((name,), ()) for name in start]
+        )
         processed_command_functions: set[tuple[str, ...]] = set()
 
         iterations_with_no_change = 0
@@ -59,7 +62,7 @@ class CompileNamespace:
                 )
 
                 if func_path not in self.command_functions:
-                    self.tree_functions[func_path] = tree.Function.from_py_ast(
+                    self.tree_functions[func_path] = tree.TreeFunction.from_py_ast(
                         func_template.node, scope
                     )
 
@@ -72,7 +75,8 @@ class CompileNamespace:
 
                     # print(f" -> Got {len(dependencies)} dependencies.")
 
-                    dependencies = self.command_functions[func_path].get_dependencies(self.blocked_functions[func_path], scope)
+                    dependencies = self.command_functions[func_path].get_dependencies(self.blocked_functions[func_path],
+                                                                                      scope)
 
                     for (template_path, compile_time_args) in dependencies:
                         # dep_func_path = (*template_path, tree.compile_time_args_to_str(compile_time_args))
@@ -107,7 +111,6 @@ class CompileNamespace:
 
                 print(" -> Waiting for dependencies.")
 
-
             if changed:
                 iterations_with_no_change = 0
 
@@ -117,12 +120,11 @@ class CompileNamespace:
                     raise CompilationError("Circular dependency detected... Or something like that.")
 
 
-
 @dataclasses.dataclass
 class StdLibConfig:
-    stack_push: tuple[str, ...]
-    stack_pop: tuple[str, ...]
-    stack_peek: tuple[str, ...]
+    stack_push: tuple[tuple[str, ...], tuple]
+    stack_pop: tuple[tuple[str, ...], tuple]
+    stack_peek: tuple[tuple[str, ...], tuple]
 
 
 class CommandFunction:
@@ -139,38 +141,14 @@ class CommandFunction:
         std_lib_config: StdLibConfig | None
     ):
         for path, block in func.blocks.items():
+            statements = self.transform_stack_ops(block.statements, functions=functions, std_lib_config=std_lib_config)
+            statements = self.resolve_compile_time_function_args(statements, scope=scope)
+
             commands = []
 
-            for statement in block.statements:
+            for statement in statements:
                 # transform stack operations to function calls
                 match statement:
-                    case blocks_expr.StackPushStatement(value=value):
-                        compile_assert(std_lib_config is not None, "std lib is required for stack operations")
-
-                        std_stack_push_func = functions[std_lib_config.stack_push]
-                        std_arg = std_stack_push_func.symbols["STD_ARG"]
-
-                        commands += [
-                            *stores_conv.var_to_var(value, std_arg),
-                            strings.LiteralString(
-                                "function %s",
-                                LocationOfString(std_stack_push_func.mcfunctions[std_stack_push_func.entry_point])
-                            )
-                        ]
-                    case blocks_expr.StackPopStatement(dst=dst):
-                        compile_assert(std_lib_config is not None, "std lib is required for stack operations")
-
-                        std_stack_pop_func = functions[std_lib_config.stack_pop]
-                        std_ret = std_stack_pop_func.symbols["STD_RET"]
-
-                        commands += [
-                            strings.LiteralString(
-                                "function %s",
-                                LocationOfString(std_stack_pop_func.mcfunctions[std_stack_pop_func.entry_point])
-                            ),
-                            *stores_conv.var_to_var(std_ret, dst),
-                        ]
-
                     case blocks_expr.ConditionalBlockCallStatement(condition=condition, true_block=true_block,
                                                                    unless=unless):
                         mcfunction = self.mcfunctions[true_block]
@@ -185,18 +163,7 @@ class CommandFunction:
                         commands.append(
                             strings.LiteralString("function %s", LocationOfString(mcfunction))
                         )
-                    case blocks.FunctionCallStatement(function=function, compile_time_args=_compile_time_args):
-                        compile_time_args = []
-                        for el in _compile_time_args:
-                            match el:
-                                case ast.Constant(value=value):
-                                    compile_time_args.append(value)
-                                case ast.Name(id=id):
-                                    try:
-                                        compile_time_args.append(scope.get(id, ("string", "pyfunc", "compile_time_arg")))
-                                    except LookupError:
-                                        compile_time_args.append(self.symbols[id])
-
+                    case blocks.FunctionCallStatement(function=function, compile_time_args=compile_time_args):
                         func_path = (*function, tree.compile_time_args_to_str(tuple(compile_time_args)))
                         func = functions[func_path]
                         mcfunction = func.mcfunctions[func.entry_point]
@@ -209,7 +176,8 @@ class CommandFunction:
                         commands += stores_conv.op_in_place(
                             dst=dst, src=src, op=op
                         )
-
+                    case blocks_expr.SimpleAssignmentStatement(src=src, dst=dst):
+                        commands += stores_conv.var_to_var(src, dst)
                     case tree.CommentStatement(message=msg):
                         commands.append(strings.Comment(msg))
                     case _:
@@ -217,9 +185,7 @@ class CommandFunction:
 
             self.mcfunctions[path].commands = commands
 
-        ...
-
-    def preprocess(self, func: blocks.BlockedFunction) -> list[tuple[str, ...], tuple]:
+    def preprocess(self, func: blocks.BlockedFunction):
         mcfunctions = {path: McFunction([]) for path in func.blocks}
 
         self.mcfunctions = mcfunctions
@@ -232,7 +198,7 @@ class CommandFunction:
         for path, block in func.blocks.items():
             for statement in block.statements:
                 match statement:
-                    case blocks.FunctionCallStatement(function=function, compile_time_args=_compile_time_args):
+                    case blocks.FunctionCallStatementUnresolvedCtArgs(function=function, compile_time_args=_compile_time_args):
                         compile_time_args = []
                         for el in _compile_time_args:
                             match el:
@@ -240,12 +206,78 @@ class CommandFunction:
                                     compile_time_args.append(value)
                                 case ast.Name(id=id):
                                     try:
-                                        compile_time_args.append(scope.get(id, ("string", "pyfunc", "compile_time_arg")))
+                                        compile_time_args.append(
+                                            scope.get(id, ("string", "pyfunc", "compile_time_arg")))
                                     except LookupError:
                                         compile_time_args.append(self.symbols[id])
                         deps.append((function, tuple(compile_time_args)))
 
         return deps
+
+    @staticmethod
+    def transform_stack_ops(
+        statements: list[tree.Statement],
+        functions: dict[tuple[str, ...], CommandFunction],
+        std_lib_config: StdLibConfig
+    ) -> list[tree.Statement]:
+        out = []
+
+        for statement in statements:
+            match statement:
+                case blocks_expr.StackPushStatement(value=value):
+                    compile_assert(std_lib_config is not None, "std lib is required for stack operations")
+                    func_name, ct_args = std_lib_config.stack_push
+                    func_path = (*func_name, tree.compile_time_args_to_str(ct_args))
+
+                    std_stack_push_func = functions[func_path]
+                    std_arg = std_stack_push_func.symbols["STD_ARG"]
+
+                    out += [
+                        blocks_expr.SimpleAssignmentStatement(value, std_arg),
+                        blocks.FunctionCallStatement(function=func_name, compile_time_args=ct_args)
+                    ]
+                case blocks_expr.StackPopStatement(dst=dst):
+                    compile_assert(std_lib_config is not None, "std lib is required for stack operations")
+
+                    func_name, ct_args = std_lib_config.stack_pop
+                    func_path = (*func_name, tree.compile_time_args_to_str(ct_args))
+
+                    std_stack_pop_func = functions[func_path]
+                    std_ret = std_stack_pop_func.symbols["STD_RET"]
+
+                    out += [
+                        blocks.FunctionCallStatement(function=func_name, compile_time_args=ct_args),
+                        blocks_expr.SimpleAssignmentStatement(std_ret, dst),
+                    ]
+                case _:
+                    out.append(statement)
+
+        return out
+
+    def resolve_compile_time_function_args(self, statements: list[tree.Statement], scope: tree.Scope) -> list[tree.Statement]:
+        out = []
+
+        for statement in statements:
+            match statement:
+                case blocks.FunctionCallStatementUnresolvedCtArgs(function=function, compile_time_args=_compile_time_args):
+                    compile_time_args = []
+                    for el in _compile_time_args:
+                        match el:
+                            case ast.Constant(value=value):
+                                compile_time_args.append(value)
+                            case ast.Name(id=id):
+                                try:
+                                    compile_time_args.append(scope.get(id, ("string", "pyfunc", "compile_time_arg")))
+                                except LookupError:
+                                    compile_time_args.append(self.symbols[id])
+                            case _:
+                                breakpoint()
+
+                    out.append(blocks.FunctionCallStatement(function, tuple(compile_time_args)))
+                case _:
+                    out.append(statement)
+
+        return out
 
 
 @dataclasses.dataclass

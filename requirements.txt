@@ -1,1 +1,2 @@
 beet==0.103.1
+ast-comments==1.2.2

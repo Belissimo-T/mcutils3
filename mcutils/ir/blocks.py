@@ -10,9 +10,6 @@ from ..data import stores, expressions
 from ..errors import CompilationError, compile_assert
 from ..lib import std
 
-
-
-
 _IF_TEMP = std.get_temp_var("conditional")
 
 
@@ -69,7 +66,7 @@ class BlockedFunction:
                 b.statements.append(statement)
 
     @classmethod
-    def from_tree_function(cls, func: tree.Function, scope: tree.Scope) -> BlockedFunction:
+    def from_tree_function(cls, func: tree.TreeFunction, scope: tree.Scope) -> BlockedFunction:
         out = cls(
             blocks={("__return",): Block([], ContinuationInfo(return_=None))},
             args=func.args,
@@ -88,12 +85,11 @@ class BlockedFunction:
 
         for block in out.blocks.values():
             new_statements = []
+
             for statement in block.statements:
                 match statement:
-                    case blocks_expr.AssignmentStatement(src=src, dst=dst):
-                        new_statements += expressions.fetch(src, dst)
                     case blocks_expr.ExpressionStatement(expression=expression):
-                        new_statements += expressions.fetch(expression, stores.NbtStore("storage", "mcutils", "null"))
+                        new_statements += expressions.fetch(expression, None)
                     case blocks_expr.IfStatement(condition=condition, true_block=true_block, false_block=false_block):
                         # breakpoint()
                         new_statements += [
@@ -113,6 +109,9 @@ class BlockedFunction:
                         ]
                     case _:
                         new_statements.append(statement)
+
+            new_statements = cls.transform_returns(new_statements)
+            new_statements = cls.transform_assignments(new_statements)
 
             block.statements = new_statements
 
@@ -138,9 +137,10 @@ class BlockedFunction:
         for name, var_type in var_types.items():
             match var_type:
                 case tree.ScoreType(player=None, objective=None):
-                    symbols[name] = std.get_temp_var("__user_" + name)
+                    symbols[name] = std.get_temp_var("__var_" + name)
                 case tree.ScoreType(player=None, objective=obj):
-                    symbols[name] = stores.ScoreboardStore(strings.UniqueScoreboardPlayer("__user_" + name), obj)
+                    symbols[name] = stores.ScoreboardStore(
+                        strings.UniqueScoreboardPlayer(strings.LiteralString("__var_" + name)), obj)
                 case tree.ScoreType(player=player, objective=None):
                     symbols[name] = stores.ScoreboardStore(player, std.MCUTILS_STD_OBJECTIVE)
                 case tree.ScoreType(player=player, objective=obj):
@@ -155,6 +155,32 @@ class BlockedFunction:
                     raise CompilationError(f"Invalid variable type {var_type!r}.")
 
         return symbols
+
+    @staticmethod
+    def transform_returns(statements: list[tree.Statement]) -> list[tree.Statement]:
+        out = []
+
+        for statement in statements:
+            match statement:
+                case blocks_expr.ReturnStatement(value=value):
+                    out.append(blocks_expr.AssignmentStatement(value, expressions.RET_VALUE))
+                case _:
+                    out.append(statement)
+
+        return out
+
+    @staticmethod
+    def transform_assignments(statements: list[tree.Statement]) -> list[tree.Statement]:
+        out = []
+
+        for statement in statements:
+            match statement:
+                case blocks_expr.AssignmentStatement(src=src, dst=dst):
+                    out += expressions.fetch(src, dst)
+                case _:
+                    out.append(statement)
+
+        return out
 
 
 @dataclasses.dataclass
@@ -202,6 +228,12 @@ class WhileStatement(tree.Statement):
 @dataclasses.dataclass
 class BlockCallStatement(tree.StoppingStatement):
     block: tuple[str, ...]
+
+
+@dataclasses.dataclass
+class FunctionCallStatementUnresolvedCtArgs(tree.Statement):
+    function: tuple[str, ...]
+    compile_time_args: tuple[ast.Constant | ast.Name, ...]
 
 
 @dataclasses.dataclass

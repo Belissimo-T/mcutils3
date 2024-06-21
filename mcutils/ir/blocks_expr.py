@@ -33,6 +33,12 @@ class AssignmentStatement(tree.Statement):
 
 
 @dataclasses.dataclass
+class SimpleAssignmentStatement(tree.Statement):
+    src: stores.ReadableStore
+    dst: stores.WritableStore
+
+
+@dataclasses.dataclass
 class InPlaceOperationStatement(tree.Statement):
     src: stores.ReadableStore
     dst: stores.WritableStore
