@@ -91,6 +91,17 @@ class BlockedFunction:
         for block in out.blocks.values():
             block.statements = blocks_expr.transform_exprs_in_stmts(block.statements, out.symbols)
 
+        set_args_statements = []
+        for i, arg in enumerate(out.args):
+            set_args_statements.append(
+                blocks_expr.AssignmentStatement(
+                    src=expressions.get_var_of_arg_i(i),
+                    dst=out.symbols[arg]
+                )
+            )
+
+        out.blocks[out.entry_point].statements = set_args_statements + out.blocks[out.entry_point].statements
+
         for block in out.blocks.values():
             new_statements = []
 

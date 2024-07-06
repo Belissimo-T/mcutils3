@@ -172,13 +172,6 @@ def while_test3():
 
 
 def sum(a: Score, b: Score):
-    # TODO: right arg popping
-    # TODO: this comepletely doesn't work
-    pop[1]()
-    a = STD_RET
-    pop[1]()
-    b = STD_RET
-
     print["a = ", a]()
     print["b = ", b]()
     c: Score = a + b
@@ -188,8 +181,14 @@ def sum(a: Score, b: Score):
 
 def sum_test():
     c: Score = sum(1, 2)
-
     print["c = ", c]()
+
+    c: Score = sum(2, -3)
+    print["c = ", c]()
+
+    c: Score = sum(52, 56)
+    print["c = ", c]()
+
 
 
 #
@@ -317,11 +316,12 @@ def find_score_overflow():
 
 
 def min_stack_i[stack_nr: int]():
+    # does not work with stack_nr == 1 bc while loops create a stack
+    # update: does kinda work idk y
     # if stack_nr == 1:
     #     log["min_stack_i", {"color": "red"}, "min_stack_i does not work with stack_nr == 1!"]()
     #     return 0
 
-    # does not work with stack_nr == 1 bc while loops create a stack
     stack_length: Score[tag_of_stack_nr[stack_nr](), STD_STACK_OBJECTIVE]
     stack_length_copy: Score = stack_length
     i: Score = 0
