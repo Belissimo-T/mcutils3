@@ -201,7 +201,11 @@ def expression_factory(node: ast.expr, context: Scope) -> Expression:
         case ast.Name(id=id):
             try:
                 a = context.get(id, "compile_time_arg")
-                raise CompilationError(f"Currently not supported :((")
+                match a:
+                    case int(a):
+                        return ConstantExpression(a)
+                    case _:
+                        raise CompilationError(f"Currently not supported :((")
             except KeyError:
                 return SymbolExpression(id)
         case _:
