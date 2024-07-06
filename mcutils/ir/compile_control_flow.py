@@ -37,7 +37,11 @@ def transform_whiles(mcfunctions: dict[tuple[str, ...], blocks.Block]) -> dict[t
                     ]
                 )
 
+                # TODO
                 mcfunctions[statement.body].continuation_info = in_loop_continuation_info
+                # mcfunctions[statement.body].continuation_info.loops.append(in_loop_continuation_info.loops[-1])
+                # mcfunctions[statement.body].continuation_info.default = in_loop_continuation_info.default
+
                 mcfunction_children.update({
                     ("__while_chk_cond",): blocks.Block(
                         # although break/continue in the loop condition check is a bit weird

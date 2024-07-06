@@ -73,6 +73,13 @@ class Scope:
             compile_function_template=self.compile_function_template or parent.compile_function_template
         )
 
+    def contains(self, name: str, type_: _ALLOWED_TYPES | tuple[_ALLOWED_TYPES, ...]) -> bool:
+        try:
+            self.get(name, type_)
+            return True
+        except KeyError:
+            return False
+
 
 def compile_time_args_to_str(args: tuple) -> str:
     if not args:
@@ -87,7 +94,11 @@ def compile_time_args_to_str(args: tuple) -> str:
                 outs.append(f"string_{s._id}")
             case stores.ScoreboardStore() as v:
                 outs.append(
-                    f"score_{v.player._id if v.player else 'no_player'}_{v.objective._id if v.objective else 'no_objective'}"
+                    f"score_{v.player._id}_{v.objective._id}"
+                )
+            case stores.NbtStore() as v:
+                outs.append(
+                    f"nbt_{v.nbt_container_type}_{v.nbt_container_argument._id}_{v.path}"
                 )
             case str(s):
                 outs.append(base64.b32encode(s.encode()).decode().lower().replace("=", "_"))
@@ -155,8 +166,10 @@ def statement_factory(node: ast.stmt, context: Scope) -> Statement:
             )
         case ast.If() as node:
             return IfStatement.from_py_ast(node, context)
-        case ast.Assign() | ast.AnnAssign():
+        case ast.Assign(value=v) | ast.AnnAssign(value=v) if v is not None:
             return AssignmentStatement.from_py_ast(node, context)
+        case ast.Assign() | ast.AnnAssign():
+            pass
         case ast.AugAssign() as a:
             return InPlaceOperationStatement.from_py_ast(a, context)
         case ast.Return(value=value):
@@ -175,6 +188,8 @@ def statement_factory(node: ast.stmt, context: Scope) -> Statement:
 
 def expression_factory(node: ast.expr, context: Scope) -> Expression:
     match node:
+        case ast.UnaryOp(op=ast.USub(), operand=ast.Constant(value=val)):
+            return ConstantExpression(-val)
         case ast.UnaryOp():
             return UnaryOpExpression.from_py_ast(node)
         case ast.Compare() | ast.BinOp() | ast.BoolOp():
@@ -190,7 +205,10 @@ def expression_factory(node: ast.expr, context: Scope) -> Expression:
             except KeyError:
                 return SymbolExpression(id)
         case _:
-            raise CompilationError(f"Invalid expression {node!r}")
+            try:
+                return ConstantExpression(ast.literal_eval(node))
+            except ValueError as e:
+                raise CompilationError(f"Invalid expression {node!r}") from e
 
 
 def annotation_to_datatype(ann: ast.expr, context: Scope) -> VariableType:
@@ -204,12 +222,12 @@ def annotation_to_datatype(ann: ast.expr, context: Scope) -> VariableType:
                              objective=parse_string(s2, context))
         case ast.Name(id="LocalScope"):
             return LocalScopeType(stores.AnyDataType)
-        case ast.Name(id="Nbt"):
-            return NbtType(stores.AnyDataType)
-        case ast.Subscript(value=ast.Name(id="Nbt"), slice=ast.Name(id=type_str)):
-            return NbtType(getattr(stores, type_str))
-        case ast.Subscript(value=ast.Name(id="LocalScope"), slice=ast.Name(id=type_str)):
-            return LocalScopeType(getattr(stores, type_str))
+        # case ast.Name(id="Nbt"):
+        #     return NbtType(stores.AnyDataType)
+        case ast.Subscript(value=ast.Name(id="Nbt"), slice=ast.Tuple(elts=[ast.Name(id=type_str), ast.Constant(value=type_), arg, ast.Constant(value=path)])):
+            return NbtType(getattr(stores, type_str), type_, parse_string(arg, context), path)
+        # case ast.Subscript(value=ast.Name(id="LocalScope"), slice=ast.Name(id=type_str)):
+        #     return LocalScopeType(getattr(stores, type_str))
         case _:
             raise CompilationError(f"Invalid annotation {ann!r}")
 
@@ -250,6 +268,9 @@ class ScoreType(VariableType):
 @dataclasses.dataclass
 class NbtType(VariableType):
     dtype: typing.Type[stores.DataType]
+    type: typing.Literal["block", "entity", "storage"] | None
+    arg: strings.String | None
+    path: str | None
 
 
 @dataclasses.dataclass
@@ -394,7 +415,7 @@ class FunctionCallExpression(Expression):
 
                 for el in elts:
                     match el:
-                        case ast.Constant() | ast.Name():
+                        case ast.Constant() | ast.Name() | ast.Dict():
                             compile_time_args.append(el)
                         case _:
                             raise CompilationError(f"Unsupported compile time args {s!r}.")

@@ -30,9 +30,13 @@ class BlockedFunction:
         return base + (new_name,)
 
     @classmethod
-    def process_block(cls, statements: list[tree.Statement], continuation_info: ContinuationInfo,
-                      blocks: dict[tuple[str, ...], Block],
-                      path: tuple[str, ...] = ()):
+    def process_block(
+        cls,
+        statements: list[tree.Statement],
+        continuation_info: ContinuationInfo,
+        blocks: dict[tuple[str, ...], Block],
+        path: tuple[str, ...] = ()
+    ):
         b = Block([], continuation_info)
         blocks[path] = b
 
@@ -59,8 +63,12 @@ class BlockedFunction:
                 )
 
                 b.statements.append(stmt)
-                cls.process_block(statements=statement.body, continuation_info=continuation_info, path=stmt.body,
-                                  blocks=blocks)
+                cls.process_block(
+                    statements=statement.body,
+                    continuation_info=continuation_info,
+                    path=stmt.body,
+                    blocks=blocks
+                )
             else:
                 compile_assert(not isinstance(statement, tree.NestedStatement))
                 b.statements.append(statement)
@@ -112,8 +120,23 @@ class BlockedFunction:
 
             new_statements = cls.transform_returns(new_statements)
             new_statements = cls.transform_assignments(new_statements)
+            new_statements = cls.resolve_compile_time_function_args(new_statements, scope, out.symbols)
 
-            block.statements = new_statements
+            new2_statements = []
+            for statement in new_statements:
+                match statement:
+                    case FunctionCallStatement(
+                        function=function,
+                        compile_time_args=compile_time_args
+                    ) if len(function) == 1 and scope.contains(function[0], "pyfunc"):
+                        new2_statements += [
+                            tree.CommentStatement(f"Call to python function {function}."),
+                            *scope.get(function[0], "pyfunc")(*compile_time_args)
+                        ]
+                    case _:
+                        new2_statements.append(statement)
+
+            block.statements = new2_statements
 
         return out
 
@@ -145,9 +168,9 @@ class BlockedFunction:
                     symbols[name] = stores.ScoreboardStore(player, std.MCUTILS_STD_OBJECTIVE)
                 case tree.ScoreType(player=player, objective=obj):
                     symbols[name] = stores.ScoreboardStore(player, obj)
-                case tree.NbtType():
-                    compile_assert(False)
-                    # scope.symbols[name] = stores.NbtStore(var_type.dtype)
+                case tree.NbtType(dtype=dtype, type=type_, arg=arg, path=path):
+                    # compile_assert(False)
+                    symbols[name] = stores.NbtStore[dtype](type_, arg, path)
                 case tree.LocalScopeType():
                     compile_assert(False)
                     # scope.symbols[name] = stores.LocalScopeStore(var_type.dtype)
@@ -177,6 +200,38 @@ class BlockedFunction:
             match statement:
                 case blocks_expr.AssignmentStatement(src=src, dst=dst):
                     out += expressions.fetch(src, dst)
+                case _:
+                    out.append(statement)
+
+        return out
+
+    @staticmethod
+    def resolve_compile_time_function_args(
+        statements: list[tree.Statement],
+        scope: tree.Scope,
+        symbols: dict[str, stores.ReadableStore]
+    ) -> list[tree.Statement]:
+        out = []
+
+        for statement in statements:
+            match statement:
+                case FunctionCallStatementUnresolvedCtArgs(function=function, compile_time_args=_compile_time_args):
+                    compile_time_args = []
+                    for el in _compile_time_args:
+                        try:
+                            compile_time_args.append(ast.literal_eval(el))
+                        except ValueError:
+                            match el:
+                                case ast.Name(id=id):
+                                    try:
+                                        compile_time_args.append(
+                                            scope.get(id, ("string", "pyfunc", "compile_time_arg")))
+                                    except LookupError:
+                                        compile_time_args.append(symbols[id])
+                                case _:
+                                    breakpoint()
+
+                    out.append(FunctionCallStatement(function, tuple(compile_time_args)))
                 case _:
                     out.append(statement)
 

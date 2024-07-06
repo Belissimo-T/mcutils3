@@ -146,6 +146,7 @@ class BinOpExpression(Expression):
 
 
 def get_var_of_arg_i(i: int) -> stores.WritableStore:
+    # TODO: ARGUMENTS
     return stores.NbtStore("storage", "mcutils:expr_temp", f"arg_{i}")
 
 

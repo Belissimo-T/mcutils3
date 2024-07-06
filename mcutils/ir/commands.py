@@ -39,7 +39,7 @@ class CompileNamespace:
         while stack:
             changed = False
             for i, (func_name, args) in enumerate(stack):
-                print(f"=> Attempting compile if {func_name} with {args=}.")
+                print(f"=> Attempting to compile {func_name} with {args=}.")
                 try:
                     func_template = self.function_templates[func_name]
                 except KeyError:
@@ -75,8 +75,7 @@ class CompileNamespace:
 
                     # print(f" -> Got {len(dependencies)} dependencies.")
 
-                    dependencies = self.command_functions[func_path].get_dependencies(self.blocked_functions[func_path],
-                                                                                      scope)
+                    dependencies = self.command_functions[func_path].get_dependencies(self.blocked_functions[func_path])
 
                     for (template_path, compile_time_args) in dependencies:
                         # dep_func_path = (*template_path, tree.compile_time_args_to_str(compile_time_args))
@@ -85,8 +84,7 @@ class CompileNamespace:
                         # breakpoint()
                         stack.append((template_path, compile_time_args))
                 else:
-                    dependencies = self.command_functions[func_path].get_dependencies(self.blocked_functions[func_path],
-                                                                                      scope)
+                    dependencies = self.command_functions[func_path].get_dependencies(self.blocked_functions[func_path])
                 all_deps_compiled = True
                 for template_path, compile_time_args in dependencies:
                     dep_func_path = (*template_path, tree.compile_time_args_to_str(compile_time_args))
@@ -116,7 +114,7 @@ class CompileNamespace:
 
             else:
                 iterations_with_no_change += 1
-                if iterations_with_no_change > 5:
+                if iterations_with_no_change > 20:
                     raise CompilationError("Circular dependency detected... Or something like that.")
 
 
@@ -142,7 +140,6 @@ class CommandFunction:
     ):
         for path, block in func.blocks.items():
             statements = self.transform_stack_ops(block.statements, functions=functions, std_lib_config=std_lib_config)
-            statements = self.resolve_compile_time_function_args(statements, scope=scope)
 
             commands = []
 
@@ -193,23 +190,13 @@ class CommandFunction:
         self.entry_point = func.entry_point
         self.symbols = func.symbols
 
-    def get_dependencies(self, func: blocks.BlockedFunction, scope: tree.Scope):
+    @staticmethod
+    def get_dependencies(func: blocks.BlockedFunction):
         deps = []
         for path, block in func.blocks.items():
             for statement in block.statements:
                 match statement:
-                    case blocks.FunctionCallStatementUnresolvedCtArgs(function=function, compile_time_args=_compile_time_args):
-                        compile_time_args = []
-                        for el in _compile_time_args:
-                            match el:
-                                case ast.Constant(value=value):
-                                    compile_time_args.append(value)
-                                case ast.Name(id=id):
-                                    try:
-                                        compile_time_args.append(
-                                            scope.get(id, ("string", "pyfunc", "compile_time_arg")))
-                                    except LookupError:
-                                        compile_time_args.append(self.symbols[id])
+                    case blocks.FunctionCallStatement(function=function, compile_time_args=compile_time_args):
                         deps.append((function, tuple(compile_time_args)))
 
         return deps
@@ -254,30 +241,7 @@ class CommandFunction:
 
         return out
 
-    def resolve_compile_time_function_args(self, statements: list[tree.Statement], scope: tree.Scope) -> list[tree.Statement]:
-        out = []
 
-        for statement in statements:
-            match statement:
-                case blocks.FunctionCallStatementUnresolvedCtArgs(function=function, compile_time_args=_compile_time_args):
-                    compile_time_args = []
-                    for el in _compile_time_args:
-                        match el:
-                            case ast.Constant(value=value):
-                                compile_time_args.append(value)
-                            case ast.Name(id=id):
-                                try:
-                                    compile_time_args.append(scope.get(id, ("string", "pyfunc", "compile_time_arg")))
-                                except LookupError:
-                                    compile_time_args.append(self.symbols[id])
-                            case _:
-                                breakpoint()
-
-                    out.append(blocks.FunctionCallStatement(function, tuple(compile_time_args)))
-                case _:
-                    out.append(statement)
-
-        return out
 
 
 @dataclasses.dataclass

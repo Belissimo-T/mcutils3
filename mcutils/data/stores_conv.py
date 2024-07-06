@@ -150,13 +150,13 @@ def nbt_to_nbt(src: NbtStore, dst: NbtStore, scale: float = 1) -> list[String]:
         or dst.is_data_type(src.dtype_obj)
     ):
         # if both are AnyDataType, we assume that they are the same
-        if src.is_data_type(AnyDataType) and not dst.is_data_type(AnyDataType):
-            issue_warning(f"Assuming dtype of any-dtype source {src!r} is the same as any-dtype "
-                          f"destination {dst!r}.")
+        # if src.is_data_type(AnyDataType) and not dst.is_data_type(AnyDataType):
+        #     issue_warning(f"Assuming dtype of any-dtype source {src!r} is the same as any-dtype "
+        #                   f"destination {dst!r}.")
 
-        if not dst.is_data_type(ConcreteDataType, AnyDataType):
-            issue_warning(f"Assuming dtype of destination {dst!r} with non-concrete dtype is the "
-                          f"same as source {src!r}.")
+        # if not dst.is_data_type(ConcreteDataType, AnyDataType):
+        #     issue_warning(f"Assuming dtype of destination {dst!r} with non-concrete dtype is the "
+        #                   f"same as source {src!r}.")
 
         assert scale == 1
         return [nbt_to_same_nbt(src, dst)]
@@ -392,13 +392,13 @@ def op_in_place(
     src: ReadableStore[NumberType],
     op: typing.Literal["+", "-", "*", "/"]
 ) -> list[String]:
-    if src.is_data_type(WholeNumberType) and dst.is_data_type(WholeNumberType):
-        temp_var = ScoreboardStore("op_in_place_score_tmp", STD_TEMP_OBJECTIVE)
-        return [
-            *var_to_var(dst, temp_var),
-            *score_expr_op_in_place(temp_var, op + "=", src),
-            *var_to_var(temp_var, dst)
-        ]
+    # if src.is_data_type(WholeNumberType) and dst.is_data_type(WholeNumberType):
+    #     temp_var = ScoreboardStore("op_in_place_score_tmp", STD_TEMP_OBJECTIVE)
+    #     return [
+    #         *var_to_var(dst, temp_var),
+    #         *score_expr_op_in_place(temp_var, op + "=", src),
+    #         *var_to_var(temp_var, dst)
+    #     ]
 
     if op == "+":
         return add_in_place(dst, src)

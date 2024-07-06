@@ -67,9 +67,10 @@ def transform_expr(
     match expr:
         case tree.SymbolExpression(name):
             return symbols[name]
-        case tree.ConstantExpression(value):
-            compile_assert(type(value) is int)
+        case tree.ConstantExpression(int(value)):
             return stores.ConstInt(value)
+        case tree.ConstantExpression(value):
+            return stores.ConstStore(str(value))
         case tree.FunctionCallExpression(function=function, args=args, compile_time_args=compile_time_args):
             return expressions.FunctionCallExpression(
                 function=function,

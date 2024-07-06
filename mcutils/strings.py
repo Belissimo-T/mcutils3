@@ -73,6 +73,27 @@ class LiteralString(String):
         return self.literal == other.literal and self.args == other.args
 
 
+class DynamicString(String):
+    def __init__(self, func: typing.Callable[[dict[str, set[str]], typing.Callable[[String], str]], str]):
+        super().__init__()
+        self.func = func
+
+    def get_str(
+        self,
+        existing_strings: dict[str, set[str]],
+        resolve_string: typing.Callable[[String], str]
+    ) -> tuple[str, str]:
+        return self.func(existing_strings, resolve_string), "dynamic"
+
+    def __hash__(self):
+        return hash((self.func, self.__class__.__name__))
+
+    def __eq__(self, other):
+        if not isinstance(other, self.__class__):
+            return False
+        return self.func == other.func
+
+
 @dataclasses.dataclass(frozen=True)
 class _Counter:
     start: int = 2

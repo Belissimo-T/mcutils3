@@ -166,8 +166,10 @@ class NbtStore(PrimitiveStore):
         yield self.path
 
     def __repr__(self):
-        return f"{self.__class__.__name__}[{self.dtype_name}]({self.nbt_container_type!r}, " \
-               f"{self.nbt_container_argument!r}, {self.path!r})"
+        return (
+            f"{self.__class__.__name__}[{self.dtype_name}]({self.nbt_container_type!r}, "
+            f"{self.nbt_container_argument!r}, {self.path!r})"
+        )
 
     def with_dtype(self, dtype: typing.Type[DataType]) -> "NbtStore":
         return self.__class__[dtype](
