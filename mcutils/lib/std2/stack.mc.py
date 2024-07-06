@@ -1,9 +1,9 @@
 STD_OBJECTIVE: ScoreboardObjective["mcutils"]
 
-# STD_ARG: Score["arg", STD_OBJECTIVE]
-# STD_RET: Score["ret", STD_OBJECTIVE]
 STD_ARG: Nbt[AnyDataType, "storage", "mcutils:std", "arg"]
 STD_RET: Nbt[AnyDataType, "storage", "mcutils:std", "ret"]
+# STD_ARG: Score["arg", STD_OBJECTIVE]
+# STD_RET: Score["ret", STD_OBJECTIVE]
 
 STD_STACK_OBJECTIVE: ScoreboardObjective["stack"]
 STD_STACK_INDEX_OBJECTIVE: ScoreboardObjective["index"]
@@ -139,9 +139,12 @@ def while_test2():
     while i < 5:
         j = 0
         while j < 5:
-            print[{"color": "light_purple"}, "i", {"color": "gray"}, " = ", {"color": "gold"}, i, {"color": "gray"}, ", ", {"color": "light_purple"}, "j", {"color": "gray"}, " = ", {"color": "gold"}, j]()
+            print[{"color": "light_purple"}, "i", {"color": "gray"}, " = ", {"color": "gold"}, i, {
+                "color": "gray"}, ", ", {"color": "light_purple"}, "j", {"color": "gray"}, " = ", {
+                "color": "gold"}, j]()
             j += 1
         i += 1
+
 
 def while_test3():
     # TODO: Currently broken
@@ -162,7 +165,6 @@ def while_test3():
         break
 
     print["[6]"]()
-
 
 
 def sum(a: Score, b: Score):
@@ -283,7 +285,9 @@ def collatz():
     i: Score = 1
 
     while n != 1:
-        print["n", {"color": "gray"}, "[", {"color": "light_purple"}, i, {"color": "gray"}, "]", {"color": None}, " = ", {"color": "gold"}, n]()
+        print[
+            "n", {"color": "gray"}, "[", {"color": "light_purple"}, i, {"color": "gray"}, "]", {"color": None}, " = ", {
+                "color": "gold"}, n]()
         if n % 2 == 0:
             n /= 2
         else:
@@ -341,7 +345,8 @@ def stackdump[stack_nr]():
     b: Score = stack_length_copy
     b -= i
     b += 1
-    print[{"underlined": True}, "Enumerating ", {"color": "gold"}, b, {"color": None}, " elements of stack ", {"color": "light_purple"}, stack_nr, {"color": None}, ":"]()
+    print[{"underlined": True}, "Enumerating ", {"color": "gold"}, b, {"color": None}, " elements of stack ", {
+        "color": "light_purple"}, stack_nr, {"color": None}, ":"]()
 
     while i <= stack_length_copy:
         exists[stack_nr, i]()
@@ -377,11 +382,13 @@ def stackdump_test():
     STD_ARG = {"hihi": "huhu", "hello": ["world"]}
     push[2]()
 
-
     stackdump[2]()
 
     pop[2]()
     pop[2]()
+    pop[2]()
+    pop[2]()
+
 
 # def primes(below):
 #     i = 1
@@ -420,6 +427,5 @@ def primes_test():
             print["i", {"color": "gray"}, " = ", {"color": "gold"}, i, {"color": None}, " PRIME"]()
         else:
             print["i", {"color": "gray"}, " = ", {"color": "gold"}, i]()
-
 
         i += 1
