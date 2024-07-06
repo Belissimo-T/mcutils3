@@ -22,7 +22,11 @@ def gamerule[rule, value]():
 
 
 def gamerule_max_command_chain_length[value]():
+    log["mcutils", "Set maxCommandChainLength to ", {"color": "gold"}, value, {"color": None}, "."]()
     gamerule["maxCommandChainLength", value]()
+
+def set_max_command_chain_length():
+    gamerule_max_command_chain_length["2147483647"]()
 
 
 def scoreboard_add_objective[name]():
@@ -350,8 +354,17 @@ def stackdump[stack_nr]():
     b: Score = stack_length_copy
     b -= i
     b += 1
-    print[{"underlined": True}, "Enumerating ", {"color": "gold"}, b, {"color": None}, " elements of stack ", {
-        "color": "light_purple"}, stack_nr, {"color": None}, ":"]()
+    print[
+        {"underlined": True}, "Enumerating ",
+        {"color": "gold"}, b,
+        {"color": None}, " elements of stack ",
+        {"color": "light_purple"}, stack_nr,
+        {"color": None}, " starting with ",
+        {"color": "light_purple"}, "[", i,"]",
+        {"color": None}, ":"
+    ]()
+
+    set_max_command_chain_length()
 
     while i <= stack_length_copy:
         exists[stack_nr, i]()
@@ -363,19 +376,20 @@ def stackdump[stack_nr]():
 
         if does_exist:
             print[
-                {"color": "light_purple"}, "[", i, "]", {"color": "gray"}, ": ",
+                {"color": "light_purple"}, "[", i, "]", {"color": "gray"}, " = ",
                 {"color": "gold"}, STD_RET,
-                {"color": "gray"}, " - ", {"color": None}, data,
-                {"color": "gray"}, " ", tags
+                # {"color": "gray"}, " - ", data,
+                # " - ", tags
             ]()
         else:
             print[
-                {"color": "light_purple"}, "[", i, "]", {"color": "gray"}, ": ",
+                {"color": "light_purple"}, "[", i, "]", {"color": "gray"}, " = ",
                 {"color": "gold"}, "missing",
             ]()
 
         i += 1
 
+    gamerule_max_command_chain_length["65536"]()
 
 def stackdump_test():
     STD_ARG = [1, 2, 3]
@@ -412,7 +426,7 @@ def stackdump_test():
 #         i += 1
 
 def primes_test():
-    below: Score = 50
+    below: Score = 25
     i: Score = 1
     isprime: Score
     x: Score
