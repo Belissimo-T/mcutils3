@@ -26,6 +26,7 @@ class BlockedFunction:
         new_name = name
         while base + (new_name,) in container:
             new_name = f"{name}{i}"
+            i += 1
 
         return base + (new_name,)
 
