@@ -112,14 +112,14 @@ def nbt_number_to_nbt_number(src: NbtStore[NumberType],
 
 def nbt_to_nbt_execute_store(src: NbtStore[CompoundType | ListType | StringType | NumberType],
                              dst: NbtStore[NumberType],
-                             scale: float = 1,
+                             scale: float | None = 1,
                              scale2: float = 1) -> String:
     assert dst.dtype is not None
-    assert scale <= 2147483647
+    assert scale is None or scale <= 2147483647
 
     return LiteralString(
         f"execute store result {dst.nbt_container_type} %s {dst.path} {dst.dtype} {scale2} "
-        f"run data get {src.nbt_container_type} %s {src.path} {scale}",
+        f"run data get {src.nbt_container_type} %s {src.path}" + (f" {scale}" if scale is not None else ""),
         dst.nbt_container_argument,
         src.nbt_container_argument
     )
@@ -187,7 +187,8 @@ def nbt_to_nbt(src: NbtStore, dst: NbtStore, scale: float = 1) -> list[String]:
 
     # Counting items:
     if src.is_data_type(CompoundType, ListType, StringType) and dst.is_data_type(NumberType):
-        return [nbt_to_nbt_execute_store(src, dst, scale)]
+        assert scale == 1
+        return [nbt_to_nbt_execute_store(src, dst, None)]
 
     raise CompilationError(f"Cannot set {src.dtype_name} NbtStore to {dst.dtype_name} NbtStore.")
 

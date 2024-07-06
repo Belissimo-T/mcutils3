@@ -127,10 +127,8 @@ def while_test():
     a: Score = 1
 
     while a < 1048577:
-        # "say While Iteration!"
         print_var["a", a]()
         a *= 2
-        # print["a2 = ", a]()
 
     log["while_test", "Done!"]()
 
@@ -170,6 +168,21 @@ def while_test3():
 
     print["[6]"]()
 
+    # TODO: The following doesn't even compile
+    # while 1:
+    #     print["[7]"]()
+    #
+    #     while 1:
+    #         print["[8]"]()
+    #         if 1:
+    #             break
+    #
+    #     print["[9]"]()
+    #
+    #     if 1:
+    #         break
+
+    print["[10]"]()
 
 def sum(a: Score, b: Score):
     print["a = ", a]()
@@ -257,6 +270,7 @@ def main():
     while_test2()
     while_test3()
     primes_test()
+    nbt_test()
     # fib_test()
 
     # a[1]()
@@ -448,3 +462,14 @@ def primes_test():
             print["i", {"color": "gray"}, " = ", {"color": "gold"}, i]()
 
         i += 1
+
+
+def nbt_test():
+    my_list: Nbt[ListType, "storage", "mcutils:temp", "my_list"] = "🏳️‍🌈"
+
+    print_var["my_list", my_list]()
+
+    my_list_len: Nbt[IntType, "storage", "mcutils:temp", "my_list_len"] = my_list
+
+    print_var["len(my_list)", my_list_len]()
+

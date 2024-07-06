@@ -8,7 +8,7 @@ import typing
 
 from ..data import stores
 from ..errors import CompilationError, compile_assert
-from .. import strings
+from .. import strings, nbt
 
 
 @dataclasses.dataclass
@@ -196,7 +196,7 @@ def expression_factory(node: ast.expr, context: Scope) -> Expression:
             return BinOpExpression.from_py_ast(node, context)
         case ast.Call():
             return FunctionCallExpression.from_py_ast(node, context)
-        case ast.Constant(value=value):
+        case ast.Constant(value=int(value)):
             return ConstantExpression(value)
         case ast.Name(id=id):
             try:
@@ -210,7 +210,7 @@ def expression_factory(node: ast.expr, context: Scope) -> Expression:
                 return SymbolExpression(id)
         case _:
             try:
-                return ConstantExpression(ast.literal_eval(node))
+                return ConstantExpression(nbt.dumps(ast.literal_eval(node)))
             except ValueError as e:
                 raise CompilationError(f"Invalid expression {node!r}") from e
 
