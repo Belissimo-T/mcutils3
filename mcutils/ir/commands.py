@@ -50,6 +50,7 @@ class CompileNamespace:
                 if func_path in processed_command_functions:
                     print(" -> Already processed.")
                     stack.pop(i)
+                    changed = True
                     break
 
                 ctime_arg_names = func_template.get_compile_time_args()
@@ -106,15 +107,15 @@ class CompileNamespace:
                     print(f" -> Done! {func_path} with {dependencies}.")
                     changed = True
                     break
-
-                print(" -> Waiting for dependencies.")
+                else:
+                    print(" -> Waiting for dependencies.")
 
             if changed:
                 iterations_with_no_change = 0
 
             else:
                 iterations_with_no_change += 1
-                if iterations_with_no_change > 20:
+                if iterations_with_no_change > 1:
                     raise CompilationError("Circular dependency detected... Or something like that.")
 
 

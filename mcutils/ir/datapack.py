@@ -40,4 +40,5 @@ class Datapack:
                     out[mcfunc.location.to_str()] = beet.Function("\n".join(commands), tags=[])
 
         out.save(overwrite=True)
+
         return out

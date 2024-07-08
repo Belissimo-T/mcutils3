@@ -1,6 +1,7 @@
 import ast_comments as ast
 import pathlib
 
+from mcutils import strings
 from mcutils.ir import tree, blocks, compile_control_flow, commands, datapack
 
 
@@ -17,15 +18,17 @@ def main():
     b = commands.CompileNamespace.from_tree_namespace(a)
 
     std_lib_config = commands.StdLibConfig(
-        stack_push=(("push", ), (1, )),
-        stack_pop=(("pop", ), (1, )),
-        stack_peek=(("peek", ), (1, )),
+        stack_push=(("push",), (1,)),
+        stack_pop=(("pop",), (1,)),
+        stack_peek=(("peek",), (1,)),
     )
 
     b.resolve_templates(["main"], std_lib_config)
 
     d = datapack.Datapack("test", {"test": b})
     d.export(pathlib.Path("testout").absolute())
+
+    print(strings._ID)
 
 
 if __name__ == '__main__':

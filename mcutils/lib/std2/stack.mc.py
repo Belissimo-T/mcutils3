@@ -7,7 +7,7 @@ STD_RET: Nbt[AnyDataType, "storage", "mcutils:std", "ret"]
 
 STD_STACK_OBJECTIVE: ScoreboardObjective["stack"]
 STD_STACK_INDEX_OBJECTIVE: ScoreboardObjective["index"]
-STD_STACK_VALUE_OBJECTIVE: ScoreboardObjective["value"]
+# STD_STACK_VALUE_OBJECTIVE: ScoreboardObjective["value"]
 STD_STACK_TAG: Tag["stack"]
 STD_STACK_RET_TAG: Tag["stack_ret"]
 STD_STACK_RET_SEL = "@e[tag=%s, limit=1]" % (STD_STACK_RET_TAG,)
@@ -25,6 +25,7 @@ def gamerule_max_command_chain_length[value]():
     log["mcutils", "Set maxCommandChainLength to ", {"color": "gold"}, value, {"color": None}, "."]()
     gamerule["maxCommandChainLength", value]()
 
+
 def set_max_command_chain_length():
     gamerule_max_command_chain_length["2147483647"]()
 
@@ -35,7 +36,7 @@ def scoreboard_add_objective[name]():
 
 def load():
     scoreboard_add_objective[STD_STACK_INDEX_OBJECTIVE]()
-    scoreboard_add_objective[STD_STACK_VALUE_OBJECTIVE]()
+    # scoreboard_add_objective[STD_STACK_VALUE_OBJECTIVE]()
     scoreboard_add_objective[STD_STACK_OBJECTIVE]()
     scoreboard_add_objective[STD_OBJECTIVE]()
     scoreboard_add_objective["mcutils_std"]()
@@ -44,7 +45,7 @@ def load():
     "say * Loaded stack library!"
 
 
-def peek[stack_nr: int]():
+def peek[stack_nr]():
     stack_length: Score[tag_of_stack_nr[stack_nr](), STD_STACK_OBJECTIVE]
 
     peek_any[stack_nr, stack_length]()
@@ -74,7 +75,7 @@ def peek_any[stack_nr, index]():
     STD_RET = v
 
 
-def push[stack_nr: int]():
+def push[stack_nr]():
     "tag @e remove %s" % (STD_STACK_RET_TAG,)
 
     # summon the entity
@@ -97,7 +98,7 @@ def push[stack_nr: int]():
     v = STD_ARG
 
 
-def pop[stack_nr: int]():
+def pop[stack_nr]():
     peek[stack_nr]()
 
     # remove the entity
@@ -106,6 +107,13 @@ def pop[stack_nr: int]():
     # decrement the stack length
     stack_length: Score[tag_of_stack_nr[stack_nr](), STD_STACK_OBJECTIVE]
     stack_length -= 1
+
+
+def _pop_any[stack_nr, index]():
+    peek_any[stack_nr, index]()
+
+    # remove the entity
+    "kill %s" % (STD_STACK_RET_SEL,)
 
 
 def exists[stack_nr: int, index]():
@@ -149,40 +157,95 @@ def while_test2():
 
 
 def while_test3():
-    # TODO: Currently broken
     print["[0]"]()
 
     while 1:
         print["[1]"]()
         break
+        print["[2] !!"]()
 
     print["[2]"]()
 
     while 1:
         print["[3]"]()
-        while 1:
-            print["[4]"]()
-            break
-        print["[5]"]()
         break
+        print["[4] !!"]()
 
-    print["[6]"]()
+    print["[4]"]()
 
-    # TODO: The following doesn't even compile
-    # while 1:
-    #     print["[7]"]()
-    #
-    #     while 1:
-    #         print["[8]"]()
-    #         if 1:
-    #             break
-    #
-    #     print["[9]"]()
-    #
-    #     if 1:
-    #         break
+    while 1:
+        print["[5]"]()
+        while 1:
+            print["[6]"]()
+            break
+            print["[7] !!"]()
+        print["[7]"]()
+        break
+        print["[8] !!"]()
 
-    print["[10]"]()
+    print["[8]"]()
+
+    while 1:
+        print["[9]"]()
+        while 1:
+            print["[10]"]()
+            while 1:
+                print["[11]"]()
+                break
+                print["[12] !!"]()
+            break
+            print["[12] !!"]()
+        print["[12]"]()
+        break
+        print["[14] !!"]()
+
+    print["[13]"]()
+
+    while 1:
+        print["[14]"]()
+
+        while 1:
+            print["[15]"]()
+            if 1:
+                print["[16]"]()
+                break
+                print["[17] !!"]()
+
+            print["[17] !!"]()
+
+        print["[17]"]()
+
+        if 1:
+            print["[18]"]()
+            break
+            print["[19] !!"]()
+
+        print["[19] !!"]()
+
+    print["[19]"]()
+
+
+def _early_return_test():
+    i: Score = 0
+
+    while i < 5:
+        print_var["i", i]()
+        i += 1
+
+        if i == 3:
+            log["_early_return_test", "Returning early!"]()
+            return
+
+            log["_early_return_test", "You should not see this! (1)"]()
+
+    log["_early_return_test", "You should not see this! (2)"]()
+
+
+def early_return_test():
+    log["early_return_test", "Starting!"]()
+    _early_return_test()
+    log["early_return_test", "Done!"]()
+
 
 def sum(a: Score, b: Score):
     print["a = ", a]()
@@ -201,7 +264,6 @@ def sum_test():
 
     c: Score = sum(52, 56)
     print["c = ", c]()
-
 
 
 #
@@ -271,6 +333,7 @@ def main():
     while_test3()
     primes_test()
     nbt_test()
+    early_return_test()
     # fib_test()
 
     # a[1]()
@@ -374,7 +437,7 @@ def stackdump[stack_nr]():
         {"color": None}, " elements of stack ",
         {"color": "light_purple"}, stack_nr,
         {"color": None}, " starting with ",
-        {"color": "light_purple"}, "[", i,"]",
+        {"color": "gray"}, "[", {"color": "light_purple"}, i, {"color": "gray"}, "]",
         {"color": None}, ":"
     ]()
 
@@ -390,30 +453,37 @@ def stackdump[stack_nr]():
 
         if does_exist:
             print[
-                {"color": "light_purple"}, "[", i, "]", {"color": "gray"}, " = ",
+                {"color": "gray"}, "[", {"color": "light_purple"}, i, {"color": "gray"}, "]", {"color": "gray"}, " = ",
                 {"color": "gold"}, STD_RET,
                 # {"color": "gray"}, " - ", data,
                 # " - ", tags
             ]()
         else:
             print[
-                {"color": "light_purple"}, "[", i, "]", {"color": "gray"}, " = ",
-                {"color": "gold"}, "missing",
+                {"color": "gray"}, "[", {"color": "light_purple"}, i, {"color": "gray"}, "]", {"color": "gray"}, " = ",
+                {"color": "red"}, "missing!",
             ]()
 
         i += 1
 
     gamerule_max_command_chain_length["65536"]()
 
+
 def stackdump_test():
+    stack_length: Score[tag_of_stack_nr[2](), STD_STACK_OBJECTIVE]
+
     STD_ARG = [1, 2, 3]
     push[2]()
     STD_ARG = "asd"
+    push[2]()
+    a: Score = stack_length
     push[2]()
     STD_ARG = [.12323423, 5.0]
     push[2]()
     STD_ARG = {"hihi": "huhu", "hello": ["world"]}
     push[2]()
+
+    _pop_any[2, a]()
 
     stackdump[2]()
 
@@ -421,6 +491,9 @@ def stackdump_test():
     pop[2]()
     pop[2]()
     pop[2]()
+    pop[2]()
+
+
 
 
 # def primes(below):
@@ -472,4 +545,3 @@ def nbt_test():
     my_list_len: Nbt[IntType, "storage", "mcutils:temp", "my_list_len"] = my_list
 
     print_var["len(my_list)", my_list_len]()
-

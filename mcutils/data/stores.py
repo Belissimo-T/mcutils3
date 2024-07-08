@@ -155,10 +155,10 @@ class NbtStore(PrimitiveStore):
     def __init__(self,
                  nbt_container_type: _nbt_container_type_literal,
                  nbt_container_argument: str | strings.String,
-                 path: str = ""):
+                 path: str = "{}"):
         self.nbt_container_type = nbt_container_type
         self.nbt_container_argument = nbt_container_argument
-        self.path = path
+        self.path = "{}" if not path else path
 
     def __iter__(self):
         yield self.nbt_container_type

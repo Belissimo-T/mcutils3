@@ -38,7 +38,7 @@ class BlockedFunction:
         blocks: dict[tuple[str, ...], Block],
         path: tuple[str, ...] = ()
     ):
-        b = Block([], continuation_info)
+        b = Block([], continuation_info.with_())
         blocks[path] = b
 
         for statement in statements:
@@ -198,7 +198,8 @@ class BlockedFunction:
         for statement in statements:
             match statement:
                 case blocks_expr.ReturnStatement(value=value):
-                    out.append(blocks_expr.AssignmentStatement(value, expressions.RET_VALUE))
+                    if value is not None:
+                        out.append(blocks_expr.AssignmentStatement(value, expressions.RET_VALUE))
                 case _:
                     out.append(statement)
 
@@ -255,6 +256,7 @@ class ContinuationInfo:
     return_: tuple[str, ...] | None
     default: tuple[str, ...] | None = None
     loops: list[LoopContinuationInfo] = dataclasses.field(default_factory=list)
+    children: list[ContinuationInfo] = dataclasses.field(default_factory=list)
 
     def with_(self, default: tuple[str, ...] | None = None,
               new_loops: list[LoopContinuationInfo] = None) -> typing.Self:
@@ -262,7 +264,7 @@ class ContinuationInfo:
         return self.__class__(
             default=self.default if default is None else default,
             return_=self.return_,
-            loops=self.loops if new_loops is None else self.loops + new_loops
+            loops=self.loops.copy() if new_loops is None else self.loops + new_loops
         )
 
 
@@ -276,6 +278,7 @@ class LoopContinuationInfo:
 class Block:
     statements: list[tree.Statement]
     continuation_info: ContinuationInfo
+    parent_block: tuple[str, ...] | None = None
 
 
 @dataclasses.dataclass
