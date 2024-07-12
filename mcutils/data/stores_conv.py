@@ -65,10 +65,10 @@ def score_to_nbt(src: ScoreboardStore, dst: NbtStore[NumberType], scale: float =
     assert dst.dtype is not None
 
     return LiteralString(
-        f"execute store result {dst.nbt_container_type} %s {dst.path} {dst.dtype} {scale} "
+        f"execute store result {dst.nbt_container_type} %s %s {dst.dtype} {scale} "
         f"run scoreboard players get %s %s",
 
-        dst.nbt_container_argument,
+        dst.nbt_container_argument, dst.path,
         src.player, src.objective
     )
 
@@ -79,8 +79,8 @@ def const_to_score(src: ConstStore[WholeNumberType], dst: ScoreboardStore) -> St
 
 def const_to_nbt(src: ConstStore[T_concrete], dst: NbtStore[T_concrete]) -> String:
     return LiteralString(
-        f"data modify {dst.nbt_container_type} %s {dst.path} set value {src.value}",
-        dst.nbt_container_argument
+        f"data modify {dst.nbt_container_type} %s %s set value {src.value}",
+        dst.nbt_container_argument, dst.path,
     )
 
 
@@ -89,19 +89,19 @@ def nbt_to_score(src: NbtStore, dst: ScoreboardStore, scale: float = 1) -> Strin
 
     return LiteralString(
         f"execute store result score %s %s run data get {src.nbt_container_type} "
-        f"%s {src.path} {scale}",
+        f"%s %s {scale}",
 
         dst.player, dst.objective,
-        src.nbt_container_argument
+        src.nbt_container_argument, src.path,
     )
 
 
 def nbt_to_same_nbt(src: NbtStore[T_concrete], dst: NbtStore[T_concrete]) -> String:
     return LiteralString(
-        f"data modify {dst.nbt_container_type} %s {dst.path} "
-        f"set from {src.nbt_container_type} %s {src.path}",
-        dst.nbt_container_argument,
-        src.nbt_container_argument
+        f"data modify {dst.nbt_container_type} %s %s "
+        f"set from {src.nbt_container_type} %s %s",
+        dst.nbt_container_argument, dst.path,
+        src.nbt_container_argument, src.path,
     )
 
 
@@ -118,10 +118,10 @@ def nbt_to_nbt_execute_store(src: NbtStore[CompoundType | ListType | StringType 
     assert scale is None or scale <= 2147483647
 
     return LiteralString(
-        f"execute store result {dst.nbt_container_type} %s {dst.path} {dst.dtype} {scale2} "
-        f"run data get {src.nbt_container_type} %s {src.path}" + (f" {scale}" if scale is not None else ""),
-        dst.nbt_container_argument,
-        src.nbt_container_argument
+        f"execute store result {dst.nbt_container_type} %s %s {dst.dtype} {scale2} "
+        f"run data get {src.nbt_container_type} %s %s" + (f" {scale}" if scale is not None else ""),
+        dst.nbt_container_argument, dst.path,
+        src.nbt_container_argument, src.path,
     )
 
 
@@ -199,8 +199,10 @@ def expr_to_nbt(src: ReadableStore, dst: NbtStore, scale: float = 1) -> list[Str
         return [const_to_nbt(src, dst)]
 
     if isinstance(src, ScoreboardStore):
+        assert dst.is_data_type(WholeNumberType, AnyDataType)
+
         if not dst.is_data_type(ConcreteDataType):
-            dst = NbtStore[IntType](dst.nbt_container_type, dst.nbt_container_argument, dst.path)
+            dst = dst.with_dtype(IntType)
 
         return [score_to_nbt(src, dst, scale)]
 

@@ -173,7 +173,7 @@ def _parse_statement(node: ast.stmt, context: Scope) -> list[Statement]:
         case ast.Expr(value=ast.Constant(value=str(val))):
             return [LiteralStatement([strings.LiteralString(val)])]
         case ast.Expr():
-            return [ExpressionStatement(parse_expression(node.value, context))]
+            return [AssignmentStatement(parse_expression(node.value, context), None)]
         case ast.While(test=test, body=body):
             return [WhileLoopStatement(
                 parse_expression(test, context),
@@ -463,6 +463,9 @@ class TreeFunction:
             match statement:
                 case ast.AnnAssign(target=ast.Name(id=name), annotation=ann):
                     scope.variable_types[name] = parse_annotation(ann, scope)
+                case ast.Assign(targets=[ast.Name(id=name)]):
+                    if name not in scope.variable_types:
+                        scope.variable_types[name] = NbtType(stores.AnyDataType)
                 case ast.If(test=test, body=body, orelse=orelse):
                     cls.search_for_var_types(body, scope)
                     cls.search_for_var_types(orelse, scope)
@@ -489,7 +492,11 @@ class TreeFunction:
                 case ScoreType(player=player, objective=obj):
                     symbols[name] = stores.ScoreboardStore(player, obj)
                 case NbtType(dtype=dtype, type=type_, arg=arg, path=path):
-                    # compile_assert(False)
+                    if type_ is None:
+                        type_ = "storage"
+                        arg = "mcutils:temp"
+                        path = strings.LiteralString("vars.%s", strings.UniqueTag(strings.LiteralString(name)))
+
                     symbols[name] = stores.NbtStore[dtype](type_, arg, path)
                 case LocalScopeType():
                     compile_assert(False)
@@ -590,11 +597,6 @@ def parse_func_call(node: ast.Call, scope: Scope):
     )
 
 
-@dataclasses.dataclass
-class ExpressionStatement(Statement):
-    expression: stores.ReadableStore
-
-
 class NestedStatement(Statement):
     ...
 
@@ -628,7 +630,7 @@ class IfStatement(NestedStatement):
 @dataclasses.dataclass
 class AssignmentStatement(Statement):
     src: stores.ReadableStore
-    dst: stores.WritableStore
+    dst: stores.WritableStore | None
 
     @classmethod
     def from_py_ast(cls, node: ast.Assign | ast.AnnAssign, context: Scope):
@@ -673,7 +675,7 @@ class CommentStatement(Statement):
 
 @dataclasses.dataclass
 class StackPushStatement(Statement):
-    value: stores.ReadableStore
+    src: stores.ReadableStore
 
 
 @dataclasses.dataclass

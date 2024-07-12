@@ -1,4 +1,4 @@
 - [ ] imports
 - [ ] locals
 - [ ] fstrings
-- [ ] eliminate STD_ARG/STD_RET
+- [X] eliminate STD_ARG/STD_RET

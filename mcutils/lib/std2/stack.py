@@ -51,7 +51,7 @@ class Library:
                     case stores.NbtStore(nbt_container_type=type_, nbt_container_argument=arg, path=path):
                         out_text_components.append(
                             tellraw.NbtValue(
-                                path=path,
+                                path=resolve_string(path),
                                 block=resolve_string(arg) if type_ == "block" else tellraw.UNSET,
                                 entity=resolve_string(arg) if type_ == "entity" else tellraw.UNSET,
                                 storage=resolve_string(arg) if type_ == "storage" else tellraw.UNSET,

@@ -97,9 +97,10 @@ class ReadableStore(Generic):
     def dtype_name(self) -> str:
         return self.dtype_obj.__name__
 
-    def is_data_type(self,
-                     *type_: typing.Type[DataType] | typing.Type[ConcreteDataType]
-                     ) -> bool:
+    def is_data_type(
+        self,
+        *type_: typing.Type[DataType] | typing.Type[ConcreteDataType]
+    ) -> bool:
         return issubclass(self.dtype_obj, type_)
 
     def __repr__(self):
@@ -159,7 +160,7 @@ class NbtStore(PrimitiveWritableStore):
     def __init__(self,
                  nbt_container_type: _nbt_container_type_literal,
                  nbt_container_argument: str | strings.String,
-                 path: str = "{}"):
+                 path: str | strings.String = "{}"):
         self.nbt_container_type = nbt_container_type
         self.nbt_container_argument = nbt_container_argument
         self.path = "{}" if not path else path

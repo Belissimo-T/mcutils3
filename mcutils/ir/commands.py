@@ -3,9 +3,9 @@ from __future__ import annotations
 import dataclasses
 import typing
 
-from . import blocks, blocks_expr
+from . import blocks
 from .. import strings
-from ..ir import tree, tree_statements_base
+from ..ir import tree
 from ..data import stores, stores_conv
 from ..errors import CompilationError, compile_assert
 from ..location import Location
@@ -26,7 +26,7 @@ class CompileNamespace:
             scope=namespace.scope
         )
 
-    def resolve_templates(self, start: list[str], std_lib_config: StdLibConfig | None = None):
+    def resolve_templates(self, start: list[str], std_lib_config: blocks.StdLibConfig | None = None):
         stack: list[tuple[tuple[str, ...], tuple]] = (
             [std_lib_config.stack_peek, std_lib_config.stack_pop, std_lib_config.stack_push]
             + [((name,), ()) for name in start]
@@ -65,7 +65,8 @@ class CompileNamespace:
                     )
 
                     self.blocked_functions[func_path] = blocks.BlockedFunction.from_tree_function(
-                        self.tree_functions[func_path],
+                        func=self.tree_functions[func_path],
+                        std_lib_config=std_lib_config
                     )
 
                     self.command_functions[func_path] = CommandFunction()
@@ -92,7 +93,6 @@ class CompileNamespace:
                         func=self.blocked_functions[func_path],
                         functions=self.command_functions,
                         scope=scope,
-                        std_lib_config=std_lib_config
                     )
                     stack.pop(i)
                     processed_command_functions.add(func_path)
@@ -112,13 +112,6 @@ class CompileNamespace:
                     raise CompilationError("Circular dependency detected... Or something like that.")
 
 
-@dataclasses.dataclass
-class StdLibConfig:
-    stack_push: tuple[tuple[str, ...], tuple]
-    stack_pop: tuple[tuple[str, ...], tuple]
-    stack_peek: tuple[tuple[str, ...], tuple]
-
-
 class CommandFunction:
     mcfunctions: dict[tuple[str, ...], McFunction]
     args: tuple[str, ...]
@@ -130,18 +123,14 @@ class CommandFunction:
         func: blocks.BlockedFunction,
         functions: dict[tuple[str, ...], CommandFunction],
         scope: tree.Scope,
-        std_lib_config: StdLibConfig | None
     ):
         for path, block in func.blocks.items():
-            statements = self.transform_stack_ops(block.statements, functions=functions, std_lib_config=std_lib_config)
-
             commands = []
 
-            for statement in statements:
+            for statement in block.statements:
                 # transform stack operations to function calls
                 match statement:
-                    case blocks_expr.ConditionalBlockCallStatement(condition=condition, true_block=true_block,
-                                                                   unless=unless):
+                    case blocks.ConditionalBlockCallStatement(condition=condition, true_block=true_block, unless=unless):
                         mcfunction = self.mcfunctions[true_block]
                         commands.append(
                             strings.LiteralString(
@@ -167,7 +156,7 @@ class CommandFunction:
                         commands += stores_conv.op_in_place(
                             dst=dst, src=src, op=op
                         )
-                    case blocks_expr.SimpleAssignmentStatement(src=src, dst=dst):
+                    case blocks.SimpleAssignmentStatement(src=src, dst=dst):
                         commands += stores_conv.var_to_var(src, dst)
                     case tree.CommentStatement(message=msg):
                         for line in msg.splitlines():
@@ -195,46 +184,6 @@ class CommandFunction:
                         deps.append((function, tuple(compile_time_args)))
 
         return deps
-
-    @staticmethod
-    def transform_stack_ops(
-        statements: list[tree_statements_base.Statement],
-        functions: dict[tuple[str, ...], CommandFunction],
-        std_lib_config: StdLibConfig
-    ) -> list[tree_statements_base.Statement]:
-        out = []
-
-        for statement in statements:
-            match statement:
-                case tree.StackPushStatement(value=value):
-                    compile_assert(std_lib_config is not None, "std lib is required for stack operations")
-                    func_name, ct_args = std_lib_config.stack_push
-                    func_path = (*func_name, tree.compile_time_args_to_str(ct_args))
-
-                    std_stack_push_func = functions[func_path]
-                    std_arg = std_stack_push_func.symbols["STD_ARG"]
-
-                    out += [
-                        blocks_expr.SimpleAssignmentStatement(value, std_arg),
-                        blocks.FunctionCallStatement(function=func_name, compile_time_args=ct_args)
-                    ]
-                case tree.StackPopStatement(dst=dst):
-                    compile_assert(std_lib_config is not None, "std lib is required for stack operations")
-
-                    func_name, ct_args = std_lib_config.stack_pop
-                    func_path = (*func_name, tree.compile_time_args_to_str(ct_args))
-
-                    std_stack_pop_func = functions[func_path]
-                    std_ret = std_stack_pop_func.symbols["STD_RET"]
-
-                    out += [
-                        blocks.FunctionCallStatement(function=func_name, compile_time_args=ct_args),
-                        blocks_expr.SimpleAssignmentStatement(std_ret, dst),
-                    ]
-                case _:
-                    out.append(statement)
-
-        return out
 
 
 @dataclasses.dataclass

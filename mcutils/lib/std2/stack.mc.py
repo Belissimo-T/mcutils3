@@ -1,10 +1,5 @@
 STD_OBJECTIVE: ScoreboardObjective["mcutils"]
 
-STD_ARG: StorageData["mcutils:std", "arg"]
-STD_RET: StorageData["mcutils:std", "ret"]
-# STD_ARG: Score["arg", STD_OBJECTIVE]
-# STD_RET: Score["ret", STD_OBJECTIVE]
-
 STD_STACK_OBJECTIVE: ScoreboardObjective["stack"]
 STD_STACK_INDEX_OBJECTIVE: ScoreboardObjective["index"]
 # STD_STACK_VALUE_OBJECTIVE: ScoreboardObjective["value"]
@@ -48,7 +43,7 @@ def load():
 def peek[stack_nr]():
     stack_length: Score[tag_of_stack_nr[stack_nr](), STD_STACK_OBJECTIVE]
 
-    peek_any[stack_nr, stack_length]()
+    return peek_any[stack_nr, stack_length]()
 
 
 def peek_any[stack_nr, index]():
@@ -71,11 +66,10 @@ def peek_any[stack_nr, index]():
 
     v: EntityData[STD_STACK_RET_SEL, "data.value"]
 
-    # return value
-    STD_RET = v
+    return v
 
 
-def push[stack_nr]():
+def push[stack_nr](value: Any):
     "tag @e remove %s" % (STD_STACK_RET_TAG,)
 
     # summon the entity
@@ -91,11 +85,10 @@ def push[stack_nr]():
     stack_length += 1
 
     # set the stack index
-    entity_stack_index: Score[STD_STACK_RET_SEL, STD_STACK_INDEX_OBJECTIVE] = stack_length
+    i: Score[STD_STACK_RET_SEL, STD_STACK_INDEX_OBJECTIVE] = stack_length
 
     # set value
-    v: EntityData[STD_STACK_RET_SEL, "data.value"]
-    v = STD_ARG
+    v: EntityData[STD_STACK_RET_SEL, "data.value"] = value
 
 
 def pop[stack_nr]():
@@ -127,7 +120,7 @@ def exists[stack_nr: int, index]():
         get_objective[out]()
     )
 
-    STD_RET = out
+    return out
 
 
 def while_test():
@@ -333,27 +326,23 @@ def sum_test():
 #         n += 1
 
 
-def stack_test():
-    STD_RET = 0
+def stack_test[stack_nr]():
+    print_var["push", 42]()
+    push[stack_nr](42)
 
-    STD_ARG = 42
-    print_var["arg", STD_ARG]()
-    push[1]()
+    print_var["push", 43]()
+    push[stack_nr](43)
 
-    STD_ARG = 43
-    print_var["arg", STD_ARG]()
-    push[1]()
+    # stackdump[stack_nr]()
 
-    # stackdump[1]()
+    peek_val: Score = peek[stack_nr]()
+    print_var["peek", peek_val]()
 
-    # peek[1]()
-    STD_RET = -404
-    pop[1]()
-    print_var["ret", STD_RET]()
+    ret: Score = pop[stack_nr]()
+    print_var["ret", ret]()
 
-    STD_RET = -404
-    pop[1]()
-    print_var["ret", STD_RET]()
+    ret: Score = pop[stack_nr]()
+    print_var["ret", ret]()
 
 
 def main():
@@ -364,7 +353,8 @@ def main():
     fizz_buzz()
     collatz()
     find_score_overflow()
-    stack_test()
+    stack_test[1]()
+    stack_test[2]()
     stackdump[1]()
     stackdump_test()
     while_test2()
@@ -440,11 +430,8 @@ def min_stack_i[stack_nr: int]():
 
     while i < stack_length_copy:
         # print_var["i", i]()
-        exists[stack_nr, i]()
 
-        does_exist: Score = STD_RET
-
-        if does_exist:
+        if exists[stack_nr, i]():
             # log["min_stack_i", "Returning ", {"color": "gold"}, i, {"color": None}, "."]()
             return i
 
@@ -471,15 +458,12 @@ def stackdump[stack_nr]():
     set_max_command_chain_length()
 
     while i <= stack_length:
-        exists[stack_nr, i]()
-        does_exist: Score = STD_RET
+        val = peek_any[stack_nr, i]()
 
-        peek_any[stack_nr, i]()
-
-        if does_exist:
+        if exists[stack_nr, i]():
             print[
                 {"color": "gray"}, "[", {"color": "light_purple"}, i, {"color": "gray"}, "]", {"color": "gray"}, " = ",
-                {"color": "gold"}, STD_RET,
+                {"color": "gold"}, val,
                 # {"color": "gray"}, " - ", data,
                 # " - ", tags
             ]()
@@ -497,16 +481,12 @@ def stackdump[stack_nr]():
 def stackdump_test():
     stack_length: Score[tag_of_stack_nr[2](), STD_STACK_OBJECTIVE]
 
-    STD_ARG = [1, 2, 3]
-    push[2]()
-    STD_ARG = "asd"
-    push[2]()
+    push[2]([1, 2, 3])
+    push[2]("asd")
+    push[2]("you should never see this")
     a: Score = stack_length
-    push[2]()
-    STD_ARG = [.12323423, 5.0]
-    push[2]()
-    STD_ARG = {"hihi": "huhu", "hello": ["world"]}
-    push[2]()
+    push[2]([.12323423, 5.0])
+    push[2]({"hihi": "huhu", "hello": ["world"]})
 
     _pop_any[2, a]()
 

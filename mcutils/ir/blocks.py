@@ -4,7 +4,7 @@ import ast
 import dataclasses
 import typing
 
-from . import tree, blocks_expr, compile_control_flow
+from . import tree, compile_control_flow
 from ..data import stores, expressions, object_model
 from ..errors import compile_assert
 from ..lib import std
@@ -75,7 +75,7 @@ class BlockedFunction:
                 b.statements.append(statement)
 
     @classmethod
-    def from_tree_function(cls, func: tree.TreeFunction) -> BlockedFunction:
+    def from_tree_function(cls, func: tree.TreeFunction, std_lib_config: StdLibConfig) -> BlockedFunction:
         out = cls(
             blocks={("__return",): Block([], ContinuationInfo(return_=None))},
             args=func.args,
@@ -93,15 +93,13 @@ class BlockedFunction:
 
             for statement in block.statements:
                 match statement:
-                    case tree.ExpressionStatement(expression=expression):
-                        new_statements += expressions.fetch(expression, None)
                     case IfStatement(condition=condition, true_block=true_block, false_block=false_block):
                         if_reset_cond_var_path = cls._find_free(out.blocks, block_path, "__if_reset_cond_var")
                         # noinspection PyTypeChecker
                         if_reset_cond_var = Block(
                             statements=[
                                 BlockCallStatement(true_block),
-                                blocks_expr.SimpleAssignmentStatement(
+                                SimpleAssignmentStatement(
                                     src=stores.ConstInt(1),
                                     dst=_IF_TEMP
                                 ),
@@ -114,12 +112,12 @@ class BlockedFunction:
 
                         new_statements += [
                             *expressions.fetch(condition, _IF_TEMP),
-                            blocks_expr.ConditionalBlockCallStatement(
+                            ConditionalBlockCallStatement(
                                 condition=_IF_TEMP,
                                 true_block=if_reset_cond_var_path,
                                 unless=False
                             ),
-                            blocks_expr.ConditionalBlockCallStatement(
+                            ConditionalBlockCallStatement(
                                 condition=_IF_TEMP,
                                 true_block=false_block,
                                 unless=True
@@ -132,6 +130,10 @@ class BlockedFunction:
 
         for block in out.blocks.values():
             new_statements = cls.transform_returns(block.statements)
+            new_statements = cls.transform_assignments(new_statements)
+            new_statements = cls.transform_stack_ops(new_statements, std_lib_config)
+            new_statements = cls.transform_assignments(new_statements)
+            new_statements = cls.transform_stack_ops(new_statements, std_lib_config)
             new_statements = cls.transform_assignments(new_statements)
 
             new2_statements = []
@@ -172,6 +174,36 @@ class BlockedFunction:
             match statement:
                 case tree.AssignmentStatement(src=src, dst=dst):
                     out += expressions.fetch(src, dst)
+                case _:
+                    out.append(statement)
+
+        return out
+
+    @staticmethod
+    def transform_stack_ops(statements: list[tree_statements_base.Statement], std_lib_config: StdLibConfig) -> list[
+        tree_statements_base.Statement]:
+        out = []
+
+        for statement in statements:
+            match statement:
+                case tree.StackPopStatement(dst=dst):
+                    out.append(tree.AssignmentStatement(
+                        expressions.FunctionCallExpression(
+                            function=std_lib_config.stack_pop[0],
+                            args=(),
+                            compile_time_args=std_lib_config.stack_pop[1]
+                        ),
+                        dst
+                    ))
+                case tree.StackPushStatement(src=src):
+                    out.append(tree.AssignmentStatement(
+                        expressions.FunctionCallExpression(
+                            function=std_lib_config.stack_push[0],
+                            args=(src,),
+                            compile_time_args=std_lib_config.stack_push[1]
+                        ),
+                        None
+                    ))
                 case _:
                     out.append(statement)
 
@@ -231,3 +263,23 @@ class BlockCallStatement(tree_statements_base.StoppingStatement):
 class FunctionCallStatement(tree_statements_base.Statement):
     function: tuple[str, ...]
     compile_time_args: tuple[ast.Constant | ast.Name, ...]
+
+
+@dataclasses.dataclass
+class ConditionalBlockCallStatement(tree_statements_base.Statement):
+    condition: stores.ScoreboardStore
+    true_block: tuple[str, ...]
+    unless: bool = False
+
+
+@dataclasses.dataclass
+class SimpleAssignmentStatement(tree_statements_base.Statement):
+    src: stores.PrimitiveReadableStore
+    dst: stores.PrimitiveWritableStore
+
+
+@dataclasses.dataclass
+class StdLibConfig:
+    stack_push: tuple[tuple[str, ...], tuple]
+    stack_pop: tuple[tuple[str, ...], tuple]
+    stack_peek: tuple[tuple[str, ...], tuple]
