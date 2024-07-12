@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import copy
 
-from . import blocks, tree
+from . import blocks, tree, tree_statements_base
 from ..errors import compile_assert
 
 
@@ -126,8 +126,8 @@ def remove_stopping_statements(mcfunctions: dict[tuple[str, ...], blocks.Block])
     for mcfunction_name, mcfunction in mcfunctions.items():
         statements = []
         for statement in mcfunction.statements:
-            if isinstance(statement, tree.StoppingStatement):
-                if isinstance(statement, tree.ContinueStatement):
+            if isinstance(statement, tree_statements_base.StoppingStatement):
+                if isinstance(statement, tree_statements_base.ContinueStatement):
                     mcfunction_name_copy = list(mcfunction_name)
                     # TODO: remove this icky code
                     while mcfunction_name_copy:
@@ -141,7 +141,7 @@ def remove_stopping_statements(mcfunctions: dict[tuple[str, ...], blocks.Block])
                         compile_assert(False)
 
                     statements.append(blocks.BlockCallStatement(mcfunctions[tuple(mcfunction_name_copy)].continuation_info.loops[-1].continue_))
-                elif isinstance(statement, tree.BreakStatement):
+                elif isinstance(statement, tree_statements_base.BreakStatement):
                     mcfunction_name_copy = list(mcfunction_name)
                     while mcfunction_name_copy:
                         try:

@@ -224,41 +224,41 @@ def while_test3():
     print["[19]"]()
 
 
-def _while_test4(a):
-    log["_while_test4", "[", a, "] Called!"]()
-    if a <= 0:
-        log["_while_test4", "[", a, "] Returning!"]()
-        return
-
-    a_minus_1: Score
-    log["_while_test4", "[", a, "] Starting loop!"]()
-
-    i: Score = 0
-
-    while i < 1:
-        log["_while_test4", "[", a, "] i = ", {"color": "gold"}, i]()
-
-        STD_ARG = i
-        push[1]()
-        STD_ARG = a
-        push[1]()
-        a_minus_1 = a
-        a_minus_1 -= 1
-        log["_while_test4", "[", a, "] Calling _while_test4(", a_minus_1, ")!"]()
-        _while_test4(a_minus_1)
-        pop[1]()
-        a = STD_RET
-        log["_while_test4", "[", a, "] Returned from _while_test4(", a_minus_1, ")!"]()
-        pop[1]()
-        i = STD_RET
-
-        log["_while_test4", "[", a, "] i = ", i, " after pop"]()
-        i += 1
-        log["_while_test4", "[", a, "] i = ", i, " after increment, next iter!"]()
-
-
-def while_test4():
-    _while_test4(2)
+# def _while_test4(a):
+#     log["_while_test4", "[", a, "] Called!"]()
+#     if a <= 0:
+#         log["_while_test4", "[", a, "] Returning!"]()
+#         return
+#
+#     a_minus_1: Score
+#     log["_while_test4", "[", a, "] Starting loop!"]()
+#
+#     i: Score = 0
+#
+#     while i < 1:
+#         log["_while_test4", "[", a, "] i = ", {"color": "gold"}, i]()
+#
+#         STD_ARG = i
+#         push[1]()
+#         STD_ARG = a
+#         push[1]()
+#         a_minus_1 = a
+#         a_minus_1 -= 1
+#         log["_while_test4", "[", a, "] Calling _while_test4(", a_minus_1, ")!"]()
+#         _while_test4(a_minus_1)
+#         pop[1]()
+#         a = STD_RET
+#         log["_while_test4", "[", a, "] Returned from _while_test4(", a_minus_1, ")!"]()
+#         pop[1]()
+#         i = STD_RET
+#
+#         log["_while_test4", "[", a, "] i = ", i, " after pop"]()
+#         i += 1
+#         log["_while_test4", "[", a, "] i = ", i, " after increment, next iter!"]()
+#
+#
+# def while_test4():
+#     _while_test4(2)
 
 
 def _early_return_test():
@@ -367,7 +367,7 @@ def main():
     stackdump_test()
     while_test2()
     while_test3()
-    while_test4()
+    # while_test4()
     primes_test()
     nbt_test()
     early_return_test()
@@ -443,6 +443,7 @@ def min_stack_i[stack_nr: int]():
         does_exist = STD_RET
 
         if does_exist:
+            # log["min_stack_i", "Returning ", {"color": "gold"}, i, {"color": None}, "."]()
             return i
 
         i += 1
@@ -450,6 +451,7 @@ def min_stack_i[stack_nr: int]():
 
 def stackdump[stack_nr]():
     i: Score = min_stack_i[stack_nr]()
+    # print_var["min_stack_i", i]()
     stack_length: Score[tag_of_stack_nr[stack_nr](), STD_STACK_OBJECTIVE]
     does_exist: Score
 
@@ -463,6 +465,7 @@ def stackdump[stack_nr]():
     b: Score = stack_length_copy
     b -= i
     b += 1
+    # print_var["stack_length", stack_length_copy]()
     print[
         {"underlined": True}, "Enumerating ",
         {"color": "gold"}, b,

@@ -4,11 +4,11 @@ import ast
 import dataclasses
 import typing
 
-import mcutils.data.object_model
 from . import tree, blocks_expr, compile_control_flow
-from ..data import stores, expressions
+from ..data import stores, expressions, object_model
 from ..errors import compile_assert
 from ..lib import std
+from ..ir import tree_statements_base
 
 _IF_TEMP = std.get_temp_var("conditional")
 
@@ -33,7 +33,7 @@ class BlockedFunction:
     @classmethod
     def process_block(
         cls,
-        statements: list[tree.Statement],
+        statements: list[tree_statements_base.Statement],
         continuation_info: ContinuationInfo,
         blocks: dict[tuple[str, ...], Block],
         path: tuple[str, ...] = ()
@@ -87,18 +87,15 @@ class BlockedFunction:
 
         out.blocks = compile_control_flow.transform_all(out.blocks)
 
-        for block in out.blocks.values():
-            block.statements = blocks_expr.transform_exprs_in_stmts(block.statements, out.symbols)
-
         for block_path in list(out.blocks.keys()):
             block = out.blocks[block_path]
             new_statements = []
 
             for statement in block.statements:
                 match statement:
-                    case blocks_expr.ExpressionStatement(expression=expression):
+                    case tree.ExpressionStatement(expression=expression):
                         new_statements += expressions.fetch(expression, None)
-                    case blocks_expr.IfStatement(condition=condition, true_block=true_block, false_block=false_block):
+                    case IfStatement(condition=condition, true_block=true_block, false_block=false_block):
                         if_reset_cond_var_path = cls._find_free(out.blocks, block_path, "__if_reset_cond_var")
                         # noinspection PyTypeChecker
                         if_reset_cond_var = Block(
@@ -153,26 +150,27 @@ class BlockedFunction:
         return out
 
     @staticmethod
-    def transform_returns(statements: list[tree.Statement]) -> list[tree.Statement]:
+    def transform_returns(statements: list[tree_statements_base.Statement]) -> list[
+        tree_statements_base.Statement]:
         out = []
 
         for statement in statements:
             match statement:
-                case blocks_expr.ReturnStatement(value=value):
+                case tree.ReturnStatement(value=value):
                     if value is not None:
-                        out.append(blocks_expr.AssignmentStatement(value, mcutils.data.object_model.RET_VALUE))
+                        out.append(tree.AssignmentStatement(value, object_model.RET_VALUE))
                 case _:
                     out.append(statement)
 
         return out
 
     @staticmethod
-    def transform_assignments(statements: list[tree.Statement]) -> list[tree.Statement]:
+    def transform_assignments(statements: list[tree_statements_base.Statement]) -> list[tree_statements_base.Statement]:
         out = []
 
         for statement in statements:
             match statement:
-                case blocks_expr.AssignmentStatement(src=src, dst=dst):
+                case tree.AssignmentStatement(src=src, dst=dst):
                     out += expressions.fetch(src, dst)
                 case _:
                     out.append(statement)
@@ -205,31 +203,31 @@ class LoopContinuationInfo:
 
 @dataclasses.dataclass
 class Block:
-    statements: list[tree.Statement]
+    statements: list[tree_statements_base.Statement]
     continuation_info: ContinuationInfo
     parent_block: tuple[str, ...] | None = None
 
 
 @dataclasses.dataclass
-class IfStatement(tree.StoppingStatement):
-    condition: tree.Expression
+class IfStatement(tree_statements_base.StoppingStatement):
+    condition: stores.ReadableStore
     true_block: tuple[str, ...]
     false_block: tuple[str, ...]
     no_redirect_branches: bool = False
 
 
 @dataclasses.dataclass
-class WhileStatement(tree.Statement):
-    condition: tree.Expression
+class WhileStatement(tree_statements_base.Statement):
+    condition: stores.ReadableStore
     body: tuple[str, ...]
 
 
 @dataclasses.dataclass
-class BlockCallStatement(tree.StoppingStatement):
+class BlockCallStatement(tree_statements_base.StoppingStatement):
     block: tuple[str, ...]
 
 
 @dataclasses.dataclass
-class FunctionCallStatement(tree.Statement):
+class FunctionCallStatement(tree_statements_base.Statement):
     function: tuple[str, ...]
     compile_time_args: tuple[ast.Constant | ast.Name, ...]

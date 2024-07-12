@@ -6,7 +6,8 @@ import ast_comments as ast
 import dataclasses
 import typing
 
-from ..data import stores, object_model
+from .tree_statements_base import Statement, StoppingStatement, ContinueStatement, BreakStatement
+from ..data import stores, object_model, expressions
 from ..errors import CompilationError, compile_assert
 from .. import strings, nbt
 from ..lib import std
@@ -22,7 +23,7 @@ class Scope:
     pyfuncs: dict[str, typing.Callable] = dataclasses.field(default_factory=dict)
     compile_time_args: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
 
-    _ALLOWED_TYPES = typing.Literal["variable_type", "string", "pyfunc", "compile_time_arg", "var"]
+    _ALLOWED_TYPES = typing.Literal["variable_type", "string", "pyfunc", "compile_time_arg", "variable"]
 
     def get(self, name: str, type_: _ALLOWED_TYPES | tuple[_ALLOWED_TYPES, ...]):
         try:
@@ -36,7 +37,7 @@ class Scope:
 
             if type_ == "variable_type":
                 return self.variable_types[name]
-            elif type_ == "var":
+            elif type_ == "variable":
                 return self.variables[name]
             elif type_ == "string":
                 return self.strings_[name]
@@ -207,30 +208,49 @@ def parse_statement(node: ast.stmt, context: Scope) -> list[Statement]:
     )
 
 
-def parse_expression(node: ast.expr, context: Scope) -> Expression:
-    # TODO try annotation_to_datatype, but all fields must be set, then convert to expression
+def parse_expression(node: ast.expr, context: Scope) -> stores.ReadableStore:
+    try:
+        var_type = parse_annotation(node, context)
+    except CompilationError:
+        pass
+    else:
+        match var_type:
+            case ScoreType(player=player, objective=objective) if player is not None is not objective:
+                return stores.ScoreboardStore(
+                    player=player,
+                    objective=objective
+                )
+            case NbtType(dtype=dtype, type=type_, arg=arg, path=path) if type_ is not None and arg is not None and path is not None:
+                return stores.NbtStore[dtype](type_, arg, path)
+            case _:
+                raise CompilationError(f"Invalid expression {ast.unparse(node)}")
 
     match node:
         case ast.UnaryOp(op=ast.USub(), operand=ast.Constant(value=val)):
-            return ConstantExpression(-val)
+            return stores.ConstInt(-val)
         case ast.UnaryOp():
-            return UnaryOpExpression.from_py_ast(node)
+            return parse_unary_op(node)
         case ast.Compare() | ast.BinOp() | ast.BoolOp():
-            return BinOpExpression.from_py_ast(node, context)
+            return parse_binop(node, context)
         case ast.Call():
-            return FunctionCallExpression.from_py_ast(node, context)
+            return parse_func_call(node, context)
         case ast.Name(id=id):
+            try:
+                return context.get(id, "variable")
+            except KeyError:
+                pass
+
             try:
                 compile_time_arg = context.get(id, "compile_time_arg")
             except KeyError:
-                return SymbolExpression(id)
+                raise CompilationError(f"Unresolved identifier {id!r}.")
             else:
                 try:
                     match compile_time_arg:
                         case int():
-                            return ConstantExpression(compile_time_arg)
+                            return stores.ConstInt(compile_time_arg)
                         case _:
-                            return ConstantExpression(nbt.dumps(compile_time_arg))
+                            return stores.ConstStore(nbt.dumps(compile_time_arg))
                 except TypeError as e:
                     raise CompilationError(f"Invalid expression {node!r}") from e
         case _:
@@ -238,18 +258,18 @@ def parse_expression(node: ast.expr, context: Scope) -> Expression:
                 v = ast.literal_eval(node)
                 match v:
                     case int():
-                        return ConstantExpression(v)
+                        return stores.ConstInt(v)
                     case _:
-                        return ConstantExpression(nbt.dumps(v))
+                        return stores.ConstStore(nbt.dumps(v))
             except ValueError as e:
-                raise CompilationError(f"Invalid expression {node!r}") from e
+                raise CompilationError(f"Invalid expression {ast.unparse(node)}") from e
 
 
 def parse_value(node: ast.expr, context: Scope):
     match node:
         case ast.Name(id=id):
             try:
-                return context.get(id, ("string", "pyfunc", "compile_time_arg", "var"))
+                return context.get(id, ("string", "pyfunc", "compile_time_arg", "variable"))
             except KeyError:
                 pass
         case _:
@@ -480,53 +500,39 @@ class TreeFunction:
         return symbols
 
 
-class Expression:
-    ...
+def parse_unary_op(node: ast.UnaryOp):
+    breakpoint()
+    raise NotImplementedError
+    return expressions.UnaryOpExpression(
+        expr=parse_expression(node.operand),
+        op=node.op
+    )
 
 
-@dataclasses.dataclass
-class UnaryOpExpression(Expression):
-    expression: Expression
-    op: typing.Literal["-"]
-
-    @classmethod
-    def from_py_ast(cls, node: ast.UnaryOp):
+def parse_binop(node: ast.BoolOp | ast.Compare | ast.BinOp, context: Scope):
+    if isinstance(node, ast.Compare):
+        compile_assert(len(node.ops) == 1, f"Invalid comparison {node.ops!r}")
+        left = node.left
+        right = node.comparators[0]
+        op = node.ops[0]
+    elif isinstance(node, ast.BinOp):
+        left = node.left
+        right = node.right
+        op = node.op
+    elif isinstance(node, ast.BoolOp):
+        compile_assert(len(node.values) == 2, f"Invalid boolop {node.values!r}")
+        left, right = node.values
+        op = node.op
+    else:
         breakpoint()
-        return cls(
-            parse_expression(node.operand),
-            node.op
-        )
 
+    op = op_to_str(op)
 
-@dataclasses.dataclass
-class BinOpExpression(Expression):
-    left: Expression
-    right: Expression
-    op: typing.Literal["+", "-", "*", "/", "%", "==", "!=", "<", ">", "<=", ">=", "and", "or"]
-
-    @classmethod
-    def from_py_ast(cls, node: ast.BoolOp | ast.Compare | ast.BinOp, context: Scope):
-        if isinstance(node, ast.Compare):
-            compile_assert(len(node.ops) == 1, f"Invalid comparison {node.ops!r}")
-            left = node.left
-            right = node.comparators[0]
-            op = node.ops[0]
-        elif isinstance(node, ast.BinOp):
-            left = node.left
-            right = node.right
-            op = node.op
-        elif isinstance(node, ast.BoolOp):
-            compile_assert(len(node.values) == 2, f"Invalid boolop {node.values!r}")
-            left, right = node.values
-            op = node.op
-
-        op = op_to_str(op)
-
-        return cls(
-            parse_expression(left, context),
-            parse_expression(right, context),
-            op
-        )
+    return expressions.BinOpExpression(
+        left=parse_expression(left, context),
+        op=op,
+        right=parse_expression(right, context),
+    )
 
 
 def op_to_str(op):
@@ -562,54 +568,31 @@ def op_to_str(op):
     return op
 
 
-@dataclasses.dataclass
-class FunctionCallExpression(Expression):
-    function: tuple[str, ...]
-    compile_time_args: tuple
-    args: list[Expression]
+def parse_func_call(node: ast.Call, scope: Scope):
+    match node.func:
+        case ast.Subscript(value=ast.Name(id=name), slice=s):
+            match s:
+                case ast.Tuple(elts=elts):
+                    pass
+                case _:
+                    elts = [s]
 
-    @classmethod
-    def from_py_ast(cls, node: ast.Call, scope: Scope):
-        match node.func:
-            case ast.Subscript(value=ast.Name(id=name), slice=s):
-                match s:
-                    case ast.Tuple(elts=elts):
-                        pass
-                    case _:
-                        elts = [s]
+            compile_time_args = tuple(parse_value(el, scope) for el in elts)
+        case ast.Name(id=name):
+            compile_time_args = ()
+        case _:
+            raise CompilationError(f"Invalid function {node.func!r}.")
 
-                compile_time_args = tuple(parse_value(el, scope) for el in elts)
-            case ast.Name(id=name):
-                compile_time_args = ()
-            case _:
-                raise CompilationError(f"Invalid function {node.func!r}.")
-
-        # breakpoint()
-        return cls(
-            function=(name,),
-            compile_time_args=compile_time_args,
-            args=[parse_expression(arg, scope) for arg in node.args],
-        )
-
-
-@dataclasses.dataclass
-class ConstantExpression(Expression):
-    value: str | int | float
-    # stores.ConstStore?
-
-
-@dataclasses.dataclass
-class SymbolExpression(Expression):
-    name: str
-
-
-class Statement:
-    ...
+    return expressions.FunctionCallExpression(
+        function=(name,),
+        compile_time_args=compile_time_args,
+        args=tuple(parse_expression(arg, scope) for arg in node.args),
+    )
 
 
 @dataclasses.dataclass
 class ExpressionStatement(Statement):
-    expression: Expression
+    expression: stores.ReadableStore
 
 
 class NestedStatement(Statement):
@@ -618,30 +601,18 @@ class NestedStatement(Statement):
 
 @dataclasses.dataclass
 class WhileLoopStatement(NestedStatement):
-    condition: Expression
+    condition: stores.ReadableStore
     body: list[Statement]
-
-
-class StoppingStatement(Statement):
-    ...
-
-
-class ContinueStatement(StoppingStatement):
-    ...
-
-
-class BreakStatement(StoppingStatement):
-    ...
 
 
 @dataclasses.dataclass
 class ReturnStatement(StoppingStatement):
-    value: Expression
+    value: stores.ReadableStore | None
 
 
 @dataclasses.dataclass
 class IfStatement(NestedStatement):
-    condition: Expression
+    condition: stores.ReadableStore | None
     true_body: list[Statement]
     false_body: list[Statement]
 
@@ -656,41 +627,37 @@ class IfStatement(NestedStatement):
 
 @dataclasses.dataclass
 class AssignmentStatement(Statement):
-    target: str
-    target_type: VariableType | None
-    value: Expression
+    src: stores.ReadableStore
+    dst: stores.WritableStore
 
     @classmethod
     def from_py_ast(cls, node: ast.Assign | ast.AnnAssign, context: Scope):
         if isinstance(node, ast.AnnAssign):
             target = node.target
-            ann = parse_annotation(node.annotation, context)
         else:
             compile_assert(len(node.targets) == 1, f"Invalid assignment target {node.targets!r}")
             target = node.targets[0]
-            ann = None
 
         compile_assert(isinstance(target, ast.Name), f"Invalid assignment.")
 
         return cls(
-            target.id,
-            ann,
-            parse_expression(node.value, context)
+            parse_expression(node.value, context),
+            context.get(target.id, "variable"),
         )
 
 
 @dataclasses.dataclass
 class InPlaceOperationStatement(Statement):
-    target: str
-    value: Expression
+    dst: stores.WritableStore
+    src: stores.ReadableStore
     op: typing.Literal["+", "-", "*", "/"]
 
     @classmethod
     def from_py_ast(cls, node: ast.AugAssign, context: Scope):
         return cls(
-            node.target.id,
-            parse_expression(node.value, context),
-            op_to_str(node.op)
+            dst=context.get(node.target.id, "variable"),
+            src=parse_expression(node.value, context),
+            op=op_to_str(node.op)
         )
 
 
@@ -701,4 +668,14 @@ class LiteralStatement(Statement):
 
 @dataclasses.dataclass
 class CommentStatement(Statement):
-    message: str
+    message: strings.String | str
+
+
+@dataclasses.dataclass
+class StackPushStatement(Statement):
+    value: stores.ReadableStore
+
+
+@dataclasses.dataclass
+class StackPopStatement(Statement):
+    dst: stores.WritableStore

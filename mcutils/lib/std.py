@@ -1,5 +1,5 @@
-from mcutils import strings
-from mcutils.data import stores
+from .. import strings
+from ..data import stores
 
 
 MCUTILS_STD_OBJECTIVE = strings.UniqueScoreboardObjective(strings.LiteralString("mcutils_std"))

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from mcutils.data import stores
+from ..data import stores
 
 
 def get_var_of_arg_i(i: int) -> stores.NbtStore:

@@ -3,9 +3,10 @@ import pathlib
 
 import beet
 
-from mcutils import strings
-from mcutils.ir import commands
-from mcutils.location import Location
+from .. import strings
+# noinspection PyCompatibility
+from . import commands
+from .. import location
 
 
 @dataclasses.dataclass
@@ -27,7 +28,7 @@ class Datapack:
         for ns_name, namespace in self.namespaces.items():
             for func_name, func in namespace.command_functions.items():
                 for mcfunc_name, mcfunc in func.mcfunctions.items():
-                    mcfunc.location = Location(ns_name, func_name + mcfunc_name)
+                    mcfunc.location = location.Location(ns_name, func_name + mcfunc_name)
 
         string_resolver = strings.StringResolver()
 

@@ -1,15 +1,13 @@
 from __future__ import annotations
 
-import ast
 import dataclasses
 import typing
 
-import mcutils.ir.tree
-from . import blocks, tree, blocks_expr
+from . import blocks, blocks_expr
 from .. import strings
-from ..data import stores, stores_conv, expressions
+from ..ir import tree, tree_statements_base
+from ..data import stores, stores_conv
 from ..errors import CompilationError, compile_assert
-from ..lib import std
 from ..location import Location
 
 
@@ -78,10 +76,6 @@ class CompileNamespace:
                     dependencies = self.command_functions[func_path].get_dependencies(self.blocked_functions[func_path])
 
                     for (template_path, compile_time_args) in dependencies:
-                        # dep_func_path = (*template_path, tree.compile_time_args_to_str(compile_time_args))
-                        # if ((template_path, compile_time_args) not in stack) and (dep_func_path not in self.command_functions):
-                        #     breakpoint()
-                        # breakpoint()
                         stack.append((template_path, compile_time_args))
                 else:
                     dependencies = self.command_functions[func_path].get_dependencies(self.blocked_functions[func_path])
@@ -127,7 +121,7 @@ class StdLibConfig:
 
 class CommandFunction:
     mcfunctions: dict[tuple[str, ...], McFunction]
-    args: dict[str, tree.VariableType]
+    args: tuple[str, ...]
     entry_point: tuple[str, ...] = ()
     symbols: dict[str, stores.WritableStore | stores.ReadableStore] = dataclasses.field(default_factory=dict)
 
@@ -169,7 +163,7 @@ class CommandFunction:
                         )
                     case tree.LiteralStatement(strings=strings_):
                         commands += strings_
-                    case blocks_expr.InPlaceOperationStatement(src=src, dst=dst, op=op):
+                    case tree.InPlaceOperationStatement(src=src, dst=dst, op=op):
                         commands += stores_conv.op_in_place(
                             dst=dst, src=src, op=op
                         )
@@ -204,15 +198,15 @@ class CommandFunction:
 
     @staticmethod
     def transform_stack_ops(
-        statements: list[tree.Statement],
+        statements: list[tree_statements_base.Statement],
         functions: dict[tuple[str, ...], CommandFunction],
         std_lib_config: StdLibConfig
-    ) -> list[tree.Statement]:
+    ) -> list[tree_statements_base.Statement]:
         out = []
 
         for statement in statements:
             match statement:
-                case blocks_expr.StackPushStatement(value=value):
+                case tree.StackPushStatement(value=value):
                     compile_assert(std_lib_config is not None, "std lib is required for stack operations")
                     func_name, ct_args = std_lib_config.stack_push
                     func_path = (*func_name, tree.compile_time_args_to_str(ct_args))
@@ -224,7 +218,7 @@ class CommandFunction:
                         blocks_expr.SimpleAssignmentStatement(value, std_arg),
                         blocks.FunctionCallStatement(function=func_name, compile_time_args=ct_args)
                     ]
-                case blocks_expr.StackPopStatement(dst=dst):
+                case tree.StackPopStatement(dst=dst):
                     compile_assert(std_lib_config is not None, "std lib is required for stack operations")
 
                     func_name, ct_args = std_lib_config.stack_pop
@@ -241,8 +235,6 @@ class CommandFunction:
                     out.append(statement)
 
         return out
-
-
 
 
 @dataclasses.dataclass

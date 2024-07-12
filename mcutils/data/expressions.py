@@ -5,12 +5,11 @@ import ast
 import dataclasses
 import typing
 
-from . import stores_conv
-from .object_model import get_var_of_arg_i, RET_VALUE
+from . import stores_conv, object_model
 from .. import strings
 from ..data import stores
 from ..errors import compile_assert
-from ..ir import blocks, tree, blocks_expr
+from ..ir import blocks, tree, blocks_expr, tree_statements_base
 from ..lib import std
 
 _ARG_PRIMITIVES: dict[int, stores.NbtStore[stores.AnyDataType]] = {}
@@ -28,8 +27,8 @@ def get_temp_var(i: int) -> stores.NbtStore[stores.AnyDataType]:
 def fetch(
     src: stores.ReadableStore,
     dst: stores.PrimitiveWritableStore | None
-) -> list[tree.Statement]:
-    if isinstance(src, Expression):
+) -> list[tree_statements_base.Statement]:
+    if isinstance(src, ExpressionBase):
         out = []
         out2 = []
         temp_vars: list[stores.PrimitiveReadableStore] = []
@@ -42,10 +41,10 @@ def fetch(
 
                 out += [
                     *fetch(arg, _FETCH_TEMP),
-                    blocks_expr.StackPushStatement(_FETCH_TEMP),
+                    tree.StackPushStatement(_FETCH_TEMP),
                 ]
                 out2 += [
-                    blocks_expr.StackPopStatement(temp_var)
+                    tree.StackPopStatement(temp_var)
                 ]
 
         out += reversed(out2)
@@ -58,11 +57,15 @@ def fetch(
             return [blocks_expr.SimpleAssignmentStatement(src, dst)]
 
 
-class Expression(stores.ReadableStore):
+class ExpressionBase(stores.ReadableStore):
     args: tuple[stores.ReadableStore, ...]
 
     @abc.abstractmethod
-    def fetch_to(self, args: tuple[stores.PrimitiveReadableStore, ...], target: stores.PrimitiveWritableStore) -> list[tree.Statement]:
+    def fetch_to(
+        self,
+        args: tuple[stores.PrimitiveReadableStore, ...],
+        target: stores.PrimitiveWritableStore
+    ) -> list[tree_statements_base.Statement]:
         ...
 
     @property
@@ -71,8 +74,26 @@ class Expression(stores.ReadableStore):
         ...
 
 
+# @dataclasses.dataclass
+# class UnaryOpExpression(ExpressionBase):
+#     expr: stores.ReadableStore
+#     op: typing.Literal["not", "-"]
+#
+#     @property
+#     def args(self):
+#         return self.expr,
+#
+#     def fetch_to(self, args: tuple[stores.PrimitiveReadableStore, ...], target: stores.PrimitiveWritableStore) -> list[
+#         tree.Statement]:
+#         raise NotImplementedError
+#
+#     @property
+#     def dtype_obj(self) -> typing.Type[stores.DataType]:
+#         raise NotImplementedError
+
+
 @dataclasses.dataclass
-class BinOpExpression(Expression):
+class BinOpExpression(ExpressionBase):
     left: stores.ReadableStore
     op: typing.Literal["+", "-", "*", "/", "%", "==", "!=", "<", ">", "<=", ">=", "and", "or"]
     right: stores.ReadableStore
@@ -85,7 +106,11 @@ class BinOpExpression(Expression):
     def args(self):
         return self.left, self.right
 
-    def fetch_to(self, args: tuple[stores.PrimitiveWritableStore, ...], target: stores.PrimitiveWritableStore) -> list[tree.Statement]:
+    def fetch_to(
+        self,
+        args: tuple[stores.PrimitiveWritableStore, ...],
+        target: stores.PrimitiveWritableStore
+    ) -> list[tree_statements_base.Statement]:
         left, right = args
         if self.op in ("+", "-", "*", "/"):
             return [
@@ -155,17 +180,23 @@ class BinOpExpression(Expression):
 
 
 @dataclasses.dataclass
-class FunctionCallExpression(Expression):
+class FunctionCallExpression(ExpressionBase):
     function: tuple[str, ...]
     args: tuple[stores.ReadableStore, ...]
     compile_time_args: tuple[ast.Constant | ast.Name, ...]
 
-    def fetch_to(self, args: tuple[stores.PrimitiveWritableStore, ...], target: stores.PrimitiveWritableStore | None) -> list[
-        tree.Statement]:
+    def fetch_to(
+        self,
+        args: tuple[stores.PrimitiveWritableStore, ...],
+        target: stores.PrimitiveWritableStore | None
+    ) -> list[tree_statements_base.Statement]:
         return [
-            *[blocks_expr.SimpleAssignmentStatement(src, get_var_of_arg_i(i)) for i, src in enumerate(args)],
+            *[
+                blocks_expr.SimpleAssignmentStatement(src, object_model.get_var_of_arg_i(i))  #
+                for i, src in enumerate(args)
+            ],
             blocks.FunctionCallStatement(self.function, self.compile_time_args),
-        ] + ([blocks_expr.SimpleAssignmentStatement(RET_VALUE, target)] if target is not None else [])
+        ] + ([blocks_expr.SimpleAssignmentStatement(object_model.RET_VALUE, target)] if target is not None else [])
 
     @property
     def dtype_obj(self) -> typing.Type[stores.DataType]:

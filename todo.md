@@ -1,5 +1,5 @@
 - [ ] imports
-- [X] string fix
-- [X] datatype/var refactor
 - [ ] locals
 - [ ] fstrings
+- [ ] eliminate STD_ARG/STD_RET
+- [X] eliminate tree.Expression
