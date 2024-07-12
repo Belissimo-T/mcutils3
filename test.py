@@ -2,7 +2,7 @@ import ast_comments as ast
 import pathlib
 
 from mcutils import strings
-from mcutils.ir import tree, blocks, compile_control_flow, commands, datapack
+from mcutils.ir import tree, commands, datapack
 
 
 def main():

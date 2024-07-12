@@ -1,0 +1,5 @@
+- [ ] imports
+- [X] string fix
+- [X] datatype/var refactor
+- [ ] locals
+- [ ] fstrings

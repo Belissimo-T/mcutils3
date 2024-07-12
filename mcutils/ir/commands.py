@@ -58,8 +58,7 @@ class CompileNamespace:
 
                 scope = tree.Scope(
                     parent_scope=self.scope,
-                    compile_time_args=dict(zip(ctime_arg_names, args)),
-                    compile_function_template=lambda x, y: stack.append((x, y))
+                    compile_time_args=dict(zip(ctime_arg_names, args))
                 )
 
                 if func_path not in self.command_functions:
@@ -68,7 +67,7 @@ class CompileNamespace:
                     )
 
                     self.blocked_functions[func_path] = blocks.BlockedFunction.from_tree_function(
-                        self.tree_functions[func_path], scope
+                        self.tree_functions[func_path],
                     )
 
                     self.command_functions[func_path] = CommandFunction()
@@ -177,7 +176,8 @@ class CommandFunction:
                     case blocks_expr.SimpleAssignmentStatement(src=src, dst=dst):
                         commands += stores_conv.var_to_var(src, dst)
                     case tree.CommentStatement(message=msg):
-                        commands.append(strings.Comment(msg))
+                        for line in msg.splitlines():
+                            commands.append(strings.Comment(line))
                     case _:
                         breakpoint()
 

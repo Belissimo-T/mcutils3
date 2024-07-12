@@ -393,21 +393,24 @@ def op_in_place(
     src: ReadableStore[NumberType],
     op: typing.Literal["+", "-", "*", "/"]
 ) -> list[String]:
-    # if src.is_data_type(WholeNumberType) and dst.is_data_type(WholeNumberType):
-    #     temp_var = ScoreboardStore("op_in_place_score_tmp", STD_TEMP_OBJECTIVE)
-    #     return [
-    #         *var_to_var(dst, temp_var),
-    #         *score_expr_op_in_place(temp_var, op + "=", src),
-    #         *var_to_var(temp_var, dst)
-    #     ]
+    assert op in "+-*/"
 
-    if op == "+":
-        return add_in_place(dst, src)
-    elif op == "-":
-        return sub_in_place(dst, src)
-    elif op == "*":
-        return mul_in_place(dst, src)
-    elif op == "/":
-        return div_in_place(dst, src)
-    else:
-        raise CompilationError(f"Unsupported operation {op!r}.")
+    try:
+        if op == "+":
+            return add_in_place(dst, src)
+        elif op == "-":
+            return sub_in_place(dst, src)
+        elif op == "*":
+            return mul_in_place(dst, src)
+        elif op == "/":
+            return div_in_place(dst, src)
+    except CompilationError:
+        if src.is_data_type(WholeNumberType) and dst.is_data_type(WholeNumberType):
+            temp_var = ScoreboardStore("op_in_place_score_tmp", STD_TEMP_OBJECTIVE)
+            return [
+                *var_to_var(dst, temp_var),
+                *score_expr_op_in_place(temp_var, op + "=", src),
+                *var_to_var(temp_var, dst)
+            ]
+        else:
+            raise

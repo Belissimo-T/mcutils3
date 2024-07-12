@@ -16,7 +16,10 @@ class StringResolver:
         self.strings: dict[String, str] = {}
         self.existing_strings: dict[str, set[str]] = defaultdict(set)
 
-    def resolve_identifier(self, string: String) -> str:
+    def resolve_identifier(self, string: String | str) -> str:
+        if isinstance(string, str):
+            return string
+
         if string in self.strings:
             return self.strings[string]
         else:

@@ -1,5 +1,5 @@
 # class List(std.object.object):
-#     def __init__(self: Score):
+#     def __init__(self: Int):
 #         self.data = []  # nbt list
 #
 #     def __getitem__(self, key):
@@ -16,17 +16,17 @@ def func1():
 
     # unique, for function, but same when recursing
     # can only be int
-    x: Score = 1
+    x = Score = 1
 
     # local scope
     x = List()  # x is int object id
     x = 1  # x is int 1
-    x: Nbt[Integer] = 1  # x is int 1
-    # x = [1]  # x is nbt list
+    x = 1  # x is int 1
+    x = [1]  # x is nbt list
     x = "asd"  # x is nbt str
 
-    def func2():
-        print["x is ", x, "for me"]()
+    # def func2():
+    #     print["x is ", x, "for me"]()
 
 
 class MyTestClass:
@@ -34,23 +34,31 @@ class MyTestClass:
         ...
 
 def datatypes():
-    a: Score = 1
+    # Means Of Storage
+    # - Score
+    a: Score[player, objective]
+    # - Nbt
+    a: StorageData[name, path]
+    a: EntityData[selector, path]
+    a: BlockData[location, path]
+    # - LocalScope
+    a: LocalScope[name]
 
-    a: LocalScope[Any] = 1
+    # Types
+    a: Any
 
-    a: LocalScope[Number] = 1
-    a: LocalScope[WholeNumber] = 1
-    a: LocalScope[Byte] = 1
-    a: LocalScope[Short] = 1
-    a: LocalScope[Int] = 1
-    a: LocalScope[Long] = 1
-    a: LocalScope[RealNumber] = 1
-    a: LocalScope[Double] = 1
-    a: LocalScope[Float] = 1
+    a: Number
 
-    a: LocalScope[String] = 1
-    # a: LocalScope[List[
+    a: WholeNumber
+    a: Byte
+    a: Short
+    a: Int
+    a: Long
 
+    a: RealNumber
+    a: Double
+    a: Float
 
-# if aasd == 2:
-#     ...
+    a: String
+    a: List
+    a: Compound

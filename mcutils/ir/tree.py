@@ -6,23 +6,23 @@ import ast_comments as ast
 import dataclasses
 import typing
 
-from ..data import stores
+from ..data import stores, object_model
 from ..errors import CompilationError, compile_assert
 from .. import strings, nbt
+from ..lib import std
 
 
 @dataclasses.dataclass
 class Scope:
     parent_scope: Scope | None = None
 
-    variables: dict[str, VariableType] = dataclasses.field(default_factory=dict)
-    strings: dict[str, strings.String] = dataclasses.field(default_factory=dict)
+    variable_types: dict[str, VariableType] = dataclasses.field(default_factory=dict)
+    variables: dict[str, stores.ReadableStore | stores.WritableStore] = dataclasses.field(default_factory=dict)
+    strings_: dict[str, strings.String] = dataclasses.field(default_factory=dict)
     pyfuncs: dict[str, typing.Callable] = dataclasses.field(default_factory=dict)
     compile_time_args: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
 
-    compile_function_template: typing.Callable[[tuple[str, ...], tuple], None] | None = None
-
-    _ALLOWED_TYPES = typing.Literal["variable", "string", "pyfunc", "compile_time_arg"]
+    _ALLOWED_TYPES = typing.Literal["variable_type", "string", "pyfunc", "compile_time_arg", "var"]
 
     def get(self, name: str, type_: _ALLOWED_TYPES | tuple[_ALLOWED_TYPES, ...]):
         try:
@@ -34,10 +34,12 @@ class Scope:
                         pass
                 raise KeyError(f"Undefined {type_} {name!r}.")
 
-            if type_ == "variable":
+            if type_ == "variable_type":
+                return self.variable_types[name]
+            elif type_ == "var":
                 return self.variables[name]
             elif type_ == "string":
-                return self.strings[name]
+                return self.strings_[name]
             elif type_ == "pyfunc":
                 return self.pyfuncs[name]
             elif type_ == "compile_time_arg":
@@ -50,14 +52,6 @@ class Scope:
             else:
                 raise KeyError(f"Undefined {type_} {name!r}.") from e
 
-    def get_compile_time_function_template(self):
-        if self.compile_function_template is not None:
-            return self.compile_function_template
-        elif self.parent_scope is not None:
-            return self.parent_scope.get_compile_time_function_template()
-        else:
-            raise CompilationError("No compile time function template found.")
-
     def collapse(self) -> Scope:
         if self.parent_scope is None:
             return self
@@ -65,12 +59,12 @@ class Scope:
         parent = self.parent_scope.collapse()
 
         return Scope(
-            parent_scope=parent,
-            variables={**parent.variables, **self.variables},
-            strings={**parent.strings, **self.strings},
-            pyfuncs={**parent.pyfuncs, **self.pyfuncs},
-            compile_time_args={**parent.compile_time_args, **self.compile_time_args},
-            compile_function_template=self.compile_function_template or parent.compile_function_template
+            parent_scope=None,
+            variable_types=parent.variable_types | self.variable_types,
+            variables=parent.variables | self.variables,
+            strings_=parent.strings_ | self.strings_,
+            pyfuncs=parent.pyfuncs | self.pyfuncs,
+            compile_time_args=parent.compile_time_args | self.compile_time_args,
         )
 
     def contains(self, name: str, type_: _ALLOWED_TYPES | tuple[_ALLOWED_TYPES, ...]) -> bool:
@@ -79,6 +73,24 @@ class Scope:
             return True
         except KeyError:
             return False
+
+    def add(
+        self,
+        variable_types: dict[str, VariableType] = None,
+        variables: dict[str, stores.ReadableStore | stores.WritableStore] = None,
+        strings_: dict[str, strings.String] = None, pyfuncs: dict[str, typing.Callable] = None,
+        compile_time_args: dict[str, typing.Any] = None
+    ):
+        if variable_types is not None:
+            self.variable_types.update(variable_types)
+        if variables is not None:
+            self.variables.update(variables)
+        if strings_ is not None:
+            self.strings_.update(strings_)
+        if pyfuncs is not None:
+            self.pyfuncs.update(pyfuncs)
+        if compile_time_args is not None:
+            self.compile_time_args.update(compile_time_args)
 
 
 def compile_time_args_to_str(args: tuple) -> str:
@@ -126,67 +138,78 @@ class File:
 
                 case ast.AnnAssign(target=ast.Name(id=name),
                                    annotation=ast.Subscript(value=ast.Name(id="ScoreboardObjective"), slice=s)):
-                    scope.strings[name] = strings.UniqueScoreboardObjective(
+                    scope.strings_[name] = strings.UniqueScoreboardObjective(
                         parse_string(s, scope)
                     )
                 case ast.AnnAssign(target=ast.Name(id=name),
                                    annotation=ast.Subscript(value=ast.Name(id="Tag"), slice=s)):
-                    scope.strings[name] = strings.UniqueTag(parse_string(s, scope))
+                    scope.strings_[name] = strings.UniqueTag(parse_string(s, scope))
                 case ast.Assign(targets=[ast.Name(id=name)], value=ast.BinOp(left=ast.Constant(value=val), op=ast.Mod(),
                                                                              right=ast.Tuple(elts=elts))):
-                    scope.strings[name] = strings.LiteralString(val, *[
+                    scope.strings_[name] = strings.LiteralString(val, *[
                         parse_string(el, scope) for el in elts
                     ])
                 case ast.AnnAssign(target=ast.Name(id=name), annotation=ann):
-                    scope.variables[name] = annotation_to_datatype(ann, scope)
+                    scope.variable_types[name] = parse_annotation(ann, scope)
                 case ast.Comment():
                     pass
                 case _:
                     raise CompilationError(f"Invalid statement {stmt!r} in namespace {ast!r}")
 
+        scope.add(variables=TreeFunction.assign_symbols(scope.variable_types))
+
         return cls(function_templates, scope)
 
 
-def statement_factory(node: ast.stmt, context: Scope) -> Statement:
+def _parse_statement(node: ast.stmt, context: Scope) -> list[Statement]:
     match node:
         case ast.Expr(value=ast.BinOp(left=ast.Constant(value=val), op=ast.Mod(), right=ast.Tuple(elts=elts))):
-            return LiteralStatement([
+            return [LiteralStatement([
                 strings.LiteralString(val, *[
                     parse_string(el, context) for el in elts
                 ])
-            ])
+            ])]
         case ast.Expr(value=ast.Constant(value=str(val))):
-            return LiteralStatement([strings.LiteralString(val)])
+            return [LiteralStatement([strings.LiteralString(val)])]
         case ast.Expr():
-            return ExpressionStatement(expression_factory(node.value, context))
+            return [ExpressionStatement(parse_expression(node.value, context))]
         case ast.While(test=test, body=body):
-            return WhileLoopStatement(
-                expression_factory(test, context),
-                [statement_factory(stmt, context) for stmt in body]
-            )
+            return [WhileLoopStatement(
+                parse_expression(test, context),
+                [x for stmt in body for x in parse_statement(stmt, context)]
+            )]
         case ast.If() as node:
-            return IfStatement.from_py_ast(node, context)
+            return [IfStatement.from_py_ast(node, context)]
         case ast.Assign(value=v) | ast.AnnAssign(value=v) if v is not None:
-            return AssignmentStatement.from_py_ast(node, context)
+            return [AssignmentStatement.from_py_ast(node, context)]
         case ast.Assign() | ast.AnnAssign():
-            pass
+            return []
         case ast.AugAssign() as a:
-            return InPlaceOperationStatement.from_py_ast(a, context)
+            return [InPlaceOperationStatement.from_py_ast(a, context)]
         case ast.Return(value=value):
-            return ReturnStatement(expression_factory(value, context) if value is not None else None)
+            return [ReturnStatement(parse_expression(value, context) if value is not None else None)]
         case ast.Continue():
-            return ContinueStatement()
+            return [ContinueStatement()]
         case ast.Break():
-            return BreakStatement()
+            return [BreakStatement()]
         case ast.Comment(value=v):
-            return CommentStatement(v.lstrip("#").strip())
+            return [CommentStatement(v.lstrip("#").strip())]
         case ast.Pass():
-            return CommentStatement("pass")
+            return [CommentStatement("pass")]
         case _:
             raise CompilationError(f"Invalid statement {node!r}")
 
 
-def expression_factory(node: ast.expr, context: Scope) -> Expression:
+def parse_statement(node: ast.stmt, context: Scope) -> list[Statement]:
+    return (
+        [CommentStatement(ast.unparse(node))] +
+        _parse_statement(node, context)
+    )
+
+
+def parse_expression(node: ast.expr, context: Scope) -> Expression:
+    # TODO try annotation_to_datatype, but all fields must be set, then convert to expression
+
     match node:
         case ast.UnaryOp(op=ast.USub(), operand=ast.Constant(value=val)):
             return ConstantExpression(-val)
@@ -196,44 +219,124 @@ def expression_factory(node: ast.expr, context: Scope) -> Expression:
             return BinOpExpression.from_py_ast(node, context)
         case ast.Call():
             return FunctionCallExpression.from_py_ast(node, context)
-        case ast.Constant(value=int(value)):
-            return ConstantExpression(value)
         case ast.Name(id=id):
             try:
-                a = context.get(id, "compile_time_arg")
-                match a:
-                    case int(a):
-                        return ConstantExpression(a)
-                    case _:
-                        raise CompilationError(f"Currently not supported :((")
+                compile_time_arg = context.get(id, "compile_time_arg")
             except KeyError:
                 return SymbolExpression(id)
+            else:
+                try:
+                    match compile_time_arg:
+                        case int():
+                            return ConstantExpression(compile_time_arg)
+                        case _:
+                            return ConstantExpression(nbt.dumps(compile_time_arg))
+                except TypeError as e:
+                    raise CompilationError(f"Invalid expression {node!r}") from e
         case _:
             try:
-                return ConstantExpression(nbt.dumps(ast.literal_eval(node)))
+                v = ast.literal_eval(node)
+                match v:
+                    case int():
+                        return ConstantExpression(v)
+                    case _:
+                        return ConstantExpression(nbt.dumps(v))
             except ValueError as e:
                 raise CompilationError(f"Invalid expression {node!r}") from e
 
 
-def annotation_to_datatype(ann: ast.expr, context: Scope) -> VariableType:
+def parse_value(node: ast.expr, context: Scope):
+    match node:
+        case ast.Name(id=id):
+            try:
+                return context.get(id, ("string", "pyfunc", "compile_time_arg", "var"))
+            except KeyError:
+                pass
+        case _:
+            try:
+                return ast.literal_eval(node)
+            except ValueError:
+                pass
+
+            try:
+                return parse_expression(node, context)
+            except CompilationError:
+                pass
+
+            try:
+                return parse_string(node, context)
+            except CompilationError:
+                pass
+
+
+def unpack_annotation(node: ast.expr) -> tuple[type[stores.DataType], ast.expr | None]:
+    types_by_name = {
+        "Any": stores.AnyDataType,
+        "Number": stores.NumberType,
+        "WholeNumber": stores.WholeNumberType,
+        "Byte": stores.ByteType,
+        "Short": stores.ShortType,
+        "Int": stores.IntType,
+        "Long": stores.LongType,
+        "RealNumber": stores.RealNumberType,
+        "Double": stores.DoubleType,
+        "Float": stores.FloatType,
+        "String": stores.StringType,
+        "List": stores.ListType,
+        "Compound": stores.CompoundType,
+    }
+
+    match node:
+        case ast.Subscript(value=ast.Name(id=name), slice=ast.Subscript() as inner):
+            try:
+                return types_by_name[name], inner
+            except KeyError as e:
+                raise CompilationError(f"Invalid type {ast.unparse(node)!r}") from e
+        case ast.Name(id=name) if name in types_by_name:
+            return types_by_name[name], None
+        case _:
+            return stores.AnyDataType, node
+
+
+def parse_annotation(ann: ast.expr, context: Scope) -> VariableType:
+    dtype, ann = unpack_annotation(ann)
+
     match ann:
         case ast.Name(id="Score"):
+            compile_assert(issubclass(dtype, stores.IntType) or dtype is stores.AnyDataType)
             return ScoreType()
         case ast.Subscript(value=ast.Name(id="Score"), slice=ast.Constant() as s):
+            compile_assert(issubclass(dtype, stores.IntType) or dtype is stores.AnyDataType)
             return ScoreType(player=parse_string(s, context))
         case ast.Subscript(value=ast.Name(id="Score"), slice=ast.Tuple(elts=[s1, s2])):
+            compile_assert(issubclass(dtype, stores.IntType) or dtype is stores.AnyDataType)
             return ScoreType(player=parse_string(s1, context),
                              objective=parse_string(s2, context))
+
         case ast.Name(id="LocalScope"):
-            return LocalScopeType(stores.AnyDataType)
-        # case ast.Name(id="Nbt"):
-        #     return NbtType(stores.AnyDataType)
-        case ast.Subscript(value=ast.Name(id="Nbt"), slice=ast.Tuple(elts=[ast.Name(id=type_str), ast.Constant(value=type_), arg, ast.Constant(value=path)])):
-            return NbtType(getattr(stores, type_str), type_, parse_string(arg, context), path)
-        # case ast.Subscript(value=ast.Name(id="LocalScope"), slice=ast.Name(id=type_str)):
-        #     return LocalScopeType(getattr(stores, type_str))
+            return LocalScopeType(dtype)
+
+        case None:
+            return NbtType(stores.AnyDataType)
+
+        case ast.Subscript(value=ast.Name(id="StorageData"), slice=ast.Tuple(elts=[
+            name_str,
+            ast.Constant(value=str(path))
+        ])):
+            return NbtType(dtype, "storage", parse_string(name_str, context), path)
+        case ast.Subscript(value=ast.Name(id="EntityData"), slice=ast.Tuple(elts=[
+            selector_str,
+            ast.Constant(value=str(path))
+        ])):
+            return NbtType(dtype, "entity", parse_string(selector_str, context), path)
+        case ast.Subscript(value=ast.Name(id="BlockData"), slice=ast.Tuple(elts=[
+            location_str,
+            ast.Constant(value=str(path))
+        ])):
+            return NbtType(dtype, "block", parse_string(location_str, context), path)
+
         case _:
-            raise CompilationError(f"Invalid annotation {ann!r}")
+            raise CompilationError(f"Invalid annotation {ast.unparse(ann)}.")
 
 
 def parse_string(expr: ast.expr, context: Scope) -> strings.String:
@@ -241,16 +344,33 @@ def parse_string(expr: ast.expr, context: Scope) -> strings.String:
         case ast.Constant(value=val):
             return strings.LiteralString(val)
         case ast.Name(id=name):
-            return context.get(name, ("string", "compile_time_arg"))
+            try:
+                return context.get(name, "string")
+            except KeyError:
+                pass
+
+            try:
+                val = context.get(name, "compile_time_arg")
+                match val:
+                    case str(val):
+                        return strings.LiteralString(val)
+                    case strings.String():
+                        return val
+                    case _:
+                        raise CompilationError(
+                            f"Compile-time arg {name!r} with value {val!r} cannot be interpreted as a string.")
+            except KeyError:
+                pass
+
+            raise CompilationError(f"Unresolved string {name!r}.")
         case ast.Call(func=ast.Subscript(value=ast.Name(id=func_name), slice=s), args=[], keywords=[]):
             match s:
-                case ast.Constant(value=val):
-                    return context.get(func_name, "pyfunc")(val)
-                case ast.Name(id=name):
-                    return context.get(func_name, "pyfunc")(
-                        context.get(name, ("compile_time_arg", "string", "variable")))
+                case ast.Tuple(elts=elts):
+                    args = [parse_value(el, context) for el in elts]
                 case _:
-                    raise CompilationError(f"Invalid compile time args {s!r}.")
+                    args = [parse_value(s, context)]
+
+            return context.get(func_name, "pyfunc")(*args)
         case _:
             breakpoint()
 
@@ -272,9 +392,9 @@ class ScoreType(VariableType):
 @dataclasses.dataclass
 class NbtType(VariableType):
     dtype: typing.Type[stores.DataType]
-    type: typing.Literal["block", "entity", "storage"] | None
-    arg: strings.String | None
-    path: str | None
+    type: typing.Literal["block", "entity", "storage"] | None = None
+    arg: strings.String | None = None
+    path: str | None = None
 
 
 @dataclasses.dataclass
@@ -293,29 +413,71 @@ class FunctionTemplate:
 @dataclasses.dataclass
 class TreeFunction:
     statements: list[Statement]
-    args: dict[str, VariableType]
+    args: tuple[str, ...]
     scope: Scope
 
     @classmethod
     def from_py_ast(cls, node: ast.FunctionDef, scope: Scope):
-        args = {arg.arg: annotation_to_datatype(arg.annotation, scope) for arg in node.args.args}
-        scope = Scope(parent_scope=scope, variables=args.copy())
+        args = {
+            arg.arg: object_model.get_var_of_arg_i(i).with_dtype(unpack_annotation(arg.annotation)[0])
+            for i, arg in enumerate(node.args.args)
+        }
+        scope = Scope(parent_scope=scope, variables=args)
+
+        cls.search_for_var_types(node.body, scope)
+        scope.add(variables=cls.assign_symbols(scope.variable_types))
+
         statements = []
-
         for stmt in node.body:
-            match stmt:
-                case ast.AnnAssign(target=ast.Name(id=name), annotation=ann, value=v):
-                    scope.variables[name] = annotation_to_datatype(ann, scope)
-                    if v is None:
-                        continue
-
-            statements.append(statement_factory(stmt, scope))
+            statements += parse_statement(stmt, scope)
 
         return cls(
             statements=statements,
-            args=args,
+            args=tuple(args.keys()),
             scope=scope
         )
+
+    @classmethod
+    def search_for_var_types(cls, statements: list[ast.stmt], scope: Scope):
+        for statement in statements:
+            match statement:
+                case ast.AnnAssign(target=ast.Name(id=name), annotation=ann):
+                    scope.variable_types[name] = parse_annotation(ann, scope)
+                case ast.If(test=test, body=body, orelse=orelse):
+                    cls.search_for_var_types(body, scope)
+                    cls.search_for_var_types(orelse, scope)
+                case ast.While(test=test, body=body):
+                    cls.search_for_var_types(body, scope)
+                case _:
+                    pass
+
+    @staticmethod
+    def assign_symbols(var_types: dict[str, VariableType]):
+        symbols = {}
+
+        for name, var_type in var_types.items():
+            match var_type:
+                case ScoreType(player=None, objective=None):
+                    symbols[name] = std.get_temp_var("__var_" + name)
+                case ScoreType(player=None, objective=obj):
+                    symbols[name] = stores.ScoreboardStore(
+                        strings.UniqueScoreboardPlayer(strings.LiteralString("__var_" + name)),
+                        obj
+                    )
+                case ScoreType(player=player, objective=None):
+                    symbols[name] = stores.ScoreboardStore(player, std.MCUTILS_STD_OBJECTIVE)
+                case ScoreType(player=player, objective=obj):
+                    symbols[name] = stores.ScoreboardStore(player, obj)
+                case NbtType(dtype=dtype, type=type_, arg=arg, path=path):
+                    # compile_assert(False)
+                    symbols[name] = stores.NbtStore[dtype](type_, arg, path)
+                case LocalScopeType():
+                    compile_assert(False)
+                    # scope.symbols[name] = stores.LocalScopeStore(var_type.dtype)
+                case _:
+                    raise CompilationError(f"Invalid variable type {var_type!r}.")
+
+        return symbols
 
 
 class Expression:
@@ -331,7 +493,7 @@ class UnaryOpExpression(Expression):
     def from_py_ast(cls, node: ast.UnaryOp):
         breakpoint()
         return cls(
-            expression_factory(node.operand),
+            parse_expression(node.operand),
             node.op
         )
 
@@ -361,8 +523,8 @@ class BinOpExpression(Expression):
         op = op_to_str(op)
 
         return cls(
-            expression_factory(left, context),
-            expression_factory(right, context),
+            parse_expression(left, context),
+            parse_expression(right, context),
             op
         )
 
@@ -403,28 +565,20 @@ def op_to_str(op):
 @dataclasses.dataclass
 class FunctionCallExpression(Expression):
     function: tuple[str, ...]
-    compile_time_args: tuple[ast.Constant | ast.Name, ...]
+    compile_time_args: tuple
     args: list[Expression]
 
     @classmethod
     def from_py_ast(cls, node: ast.Call, scope: Scope):
         match node.func:
             case ast.Subscript(value=ast.Name(id=name), slice=s):
-                compile_time_args = []
                 match s:
                     case ast.Tuple(elts=elts):
                         pass
                     case _:
                         elts = [s]
 
-                for el in elts:
-                    match el:
-                        case ast.Constant() | ast.Name() | ast.Dict():
-                            compile_time_args.append(el)
-                        case _:
-                            raise CompilationError(f"Unsupported compile time args {s!r}.")
-
-                compile_time_args = tuple(compile_time_args)
+                compile_time_args = tuple(parse_value(el, scope) for el in elts)
             case ast.Name(id=name):
                 compile_time_args = ()
             case _:
@@ -434,7 +588,7 @@ class FunctionCallExpression(Expression):
         return cls(
             function=(name,),
             compile_time_args=compile_time_args,
-            args=[expression_factory(arg, scope) for arg in node.args],
+            args=[parse_expression(arg, scope) for arg in node.args],
         )
 
 
@@ -494,9 +648,9 @@ class IfStatement(NestedStatement):
     @classmethod
     def from_py_ast(cls, node: ast.If, context: Scope):
         return cls(
-            expression_factory(node.test, context),
-            [statement_factory(stmt, context) for stmt in node.body],
-            [statement_factory(stmt, context) for stmt in node.orelse]
+            parse_expression(node.test, context),
+            [x for stmt in node.body for x in parse_statement(stmt, context)],
+            [x for stmt in node.orelse for x in parse_statement(stmt, context)]
         )
 
 
@@ -510,7 +664,7 @@ class AssignmentStatement(Statement):
     def from_py_ast(cls, node: ast.Assign | ast.AnnAssign, context: Scope):
         if isinstance(node, ast.AnnAssign):
             target = node.target
-            ann = annotation_to_datatype(node.annotation, context)
+            ann = parse_annotation(node.annotation, context)
         else:
             compile_assert(len(node.targets) == 1, f"Invalid assignment target {node.targets!r}")
             target = node.targets[0]
@@ -521,7 +675,7 @@ class AssignmentStatement(Statement):
         return cls(
             target.id,
             ann,
-            expression_factory(node.value, context)
+            parse_expression(node.value, context)
         )
 
 
@@ -535,7 +689,7 @@ class InPlaceOperationStatement(Statement):
     def from_py_ast(cls, node: ast.AugAssign, context: Scope):
         return cls(
             node.target.id,
-            expression_factory(node.value, context),
+            parse_expression(node.value, context),
             op_to_str(node.op)
         )
 

@@ -4,10 +4,10 @@ import ast
 import dataclasses
 import typing
 
+import mcutils.data.object_model
 from . import tree, blocks_expr, compile_control_flow
-from .. import strings
 from ..data import stores, expressions
-from ..errors import CompilationError, compile_assert
+from ..errors import compile_assert
 from ..lib import std
 
 _IF_TEMP = std.get_temp_var("conditional")
@@ -16,9 +16,9 @@ _IF_TEMP = std.get_temp_var("conditional")
 @dataclasses.dataclass
 class BlockedFunction:
     blocks: dict[tuple[str, ...], Block]
-    args: dict[str, tree.VariableType]
+    args: tuple[str, ...]
     entry_point: tuple[str, ...] = ()
-    symbols: dict[str, stores.ReadableStore] = dataclasses.field(default_factory=dict)
+    symbols: dict[str, stores.ReadableStore | stores.WritableStore] = dataclasses.field(default_factory=dict)
 
     @staticmethod
     def _find_free(container, base: tuple[str, ...], name: str):
@@ -75,35 +75,23 @@ class BlockedFunction:
                 b.statements.append(statement)
 
     @classmethod
-    def from_tree_function(cls, func: tree.TreeFunction, scope: tree.Scope) -> BlockedFunction:
+    def from_tree_function(cls, func: tree.TreeFunction) -> BlockedFunction:
         out = cls(
             blocks={("__return",): Block([], ContinuationInfo(return_=None))},
             args=func.args,
             entry_point=(),
-            symbols={}
+            symbols=func.scope.collapse().variables
         )
         cls.process_block(statements=func.statements, blocks=out.blocks,
                           continuation_info=ContinuationInfo(return_=("__return",)))
-
-        out.symbols = cls.get_symbols(out.blocks.values(), scope.variables | func.scope.collapse().variables | out.args)
 
         out.blocks = compile_control_flow.transform_all(out.blocks)
 
         for block in out.blocks.values():
             block.statements = blocks_expr.transform_exprs_in_stmts(block.statements, out.symbols)
 
-        set_args_statements = []
-        for i, arg in enumerate(out.args):
-            set_args_statements.append(
-                blocks_expr.AssignmentStatement(
-                    src=expressions.get_var_of_arg_i(i),
-                    dst=out.symbols[arg]
-                )
-            )
-
-        out.blocks[out.entry_point].statements = set_args_statements + out.blocks[out.entry_point].statements
-
-        for block in out.blocks.values():
+        for block_path in list(out.blocks.keys()):
+            block = out.blocks[block_path]
             new_statements = []
 
             for statement in block.statements:
@@ -111,16 +99,29 @@ class BlockedFunction:
                     case blocks_expr.ExpressionStatement(expression=expression):
                         new_statements += expressions.fetch(expression, None)
                     case blocks_expr.IfStatement(condition=condition, true_block=true_block, false_block=false_block):
-                        # breakpoint()
+                        if_reset_cond_var_path = cls._find_free(out.blocks, block_path, "__if_reset_cond_var")
+                        # noinspection PyTypeChecker
+                        if_reset_cond_var = Block(
+                            statements=[
+                                BlockCallStatement(true_block),
+                                blocks_expr.SimpleAssignmentStatement(
+                                    src=stores.ConstInt(1),
+                                    dst=_IF_TEMP
+                                ),
+                            ],
+
+                            continuation_info=None
+                        )
+
+                        out.blocks[if_reset_cond_var_path] = if_reset_cond_var
+
                         new_statements += [
                             *expressions.fetch(condition, _IF_TEMP),
-                            blocks_expr.StackPushStatement(_IF_TEMP),
                             blocks_expr.ConditionalBlockCallStatement(
                                 condition=_IF_TEMP,
-                                true_block=true_block,
+                                true_block=if_reset_cond_var_path,
                                 unless=False
                             ),
-                            blocks_expr.StackPopStatement(_IF_TEMP),
                             blocks_expr.ConditionalBlockCallStatement(
                                 condition=_IF_TEMP,
                                 true_block=false_block,
@@ -130,9 +131,11 @@ class BlockedFunction:
                     case _:
                         new_statements.append(statement)
 
-            new_statements = cls.transform_returns(new_statements)
+            block.statements = new_statements
+
+        for block in out.blocks.values():
+            new_statements = cls.transform_returns(block.statements)
             new_statements = cls.transform_assignments(new_statements)
-            new_statements = cls.resolve_compile_time_function_args(new_statements, scope, out.symbols)
 
             new2_statements = []
             for statement in new_statements:
@@ -140,56 +143,14 @@ class BlockedFunction:
                     case FunctionCallStatement(
                         function=function,
                         compile_time_args=compile_time_args
-                    ) if len(function) == 1 and scope.contains(function[0], "pyfunc"):
-                        new2_statements += [
-                            tree.CommentStatement(f"Call to python function {function}."),
-                            *scope.get(function[0], "pyfunc")(*compile_time_args)
-                        ]
+                    ) if len(function) == 1 and func.scope.contains(function[0], "pyfunc"):
+                        new2_statements += func.scope.get(function[0], "pyfunc")(*compile_time_args)
                     case _:
                         new2_statements.append(statement)
 
             block.statements = new2_statements
 
         return out
-
-    @staticmethod
-    def get_symbols(blocks: typing.Iterable[Block], args: dict[str, tree.VariableType]):
-        var_types: dict[str, tree.VariableType] = args.copy()
-
-        # for block in blocks:
-        #     for statement in block.statements:
-        #         if isinstance(statement, tree.AssignmentStatement):
-        #             if statement.target_type is not None:
-        #                 if statement.target_type != var_types.get(statement.target, None) is not None:
-        #                     raise CompilationError(
-        #                         f"Variable {statement.target!r} has type {var_types[statement.target]} but is assigned "
-        #                         f"to {statement.target_type}."
-        #                     )
-        #                 var_types[statement.target] = statement.target_type
-
-        symbols = {}
-
-        for name, var_type in var_types.items():
-            match var_type:
-                case tree.ScoreType(player=None, objective=None):
-                    symbols[name] = std.get_temp_var("__var_" + name)
-                case tree.ScoreType(player=None, objective=obj):
-                    symbols[name] = stores.ScoreboardStore(
-                        strings.UniqueScoreboardPlayer(strings.LiteralString("__var_" + name)), obj)
-                case tree.ScoreType(player=player, objective=None):
-                    symbols[name] = stores.ScoreboardStore(player, std.MCUTILS_STD_OBJECTIVE)
-                case tree.ScoreType(player=player, objective=obj):
-                    symbols[name] = stores.ScoreboardStore(player, obj)
-                case tree.NbtType(dtype=dtype, type=type_, arg=arg, path=path):
-                    # compile_assert(False)
-                    symbols[name] = stores.NbtStore[dtype](type_, arg, path)
-                case tree.LocalScopeType():
-                    compile_assert(False)
-                    # scope.symbols[name] = stores.LocalScopeStore(var_type.dtype)
-                case _:
-                    raise CompilationError(f"Invalid variable type {var_type!r}.")
-
-        return symbols
 
     @staticmethod
     def transform_returns(statements: list[tree.Statement]) -> list[tree.Statement]:
@@ -199,7 +160,7 @@ class BlockedFunction:
             match statement:
                 case blocks_expr.ReturnStatement(value=value):
                     if value is not None:
-                        out.append(blocks_expr.AssignmentStatement(value, expressions.RET_VALUE))
+                        out.append(blocks_expr.AssignmentStatement(value, mcutils.data.object_model.RET_VALUE))
                 case _:
                     out.append(statement)
 
@@ -213,38 +174,6 @@ class BlockedFunction:
             match statement:
                 case blocks_expr.AssignmentStatement(src=src, dst=dst):
                     out += expressions.fetch(src, dst)
-                case _:
-                    out.append(statement)
-
-        return out
-
-    @staticmethod
-    def resolve_compile_time_function_args(
-        statements: list[tree.Statement],
-        scope: tree.Scope,
-        symbols: dict[str, stores.ReadableStore]
-    ) -> list[tree.Statement]:
-        out = []
-
-        for statement in statements:
-            match statement:
-                case FunctionCallStatementUnresolvedCtArgs(function=function, compile_time_args=_compile_time_args):
-                    compile_time_args = []
-                    for el in _compile_time_args:
-                        try:
-                            compile_time_args.append(ast.literal_eval(el))
-                        except ValueError:
-                            match el:
-                                case ast.Name(id=id):
-                                    try:
-                                        compile_time_args.append(
-                                            scope.get(id, ("string", "pyfunc", "compile_time_arg")))
-                                    except LookupError:
-                                        compile_time_args.append(symbols[id])
-                                case _:
-                                    breakpoint()
-
-                    out.append(FunctionCallStatement(function, tuple(compile_time_args)))
                 case _:
                     out.append(statement)
 
@@ -298,12 +227,6 @@ class WhileStatement(tree.Statement):
 @dataclasses.dataclass
 class BlockCallStatement(tree.StoppingStatement):
     block: tuple[str, ...]
-
-
-@dataclasses.dataclass
-class FunctionCallStatementUnresolvedCtArgs(tree.Statement):
-    function: tuple[str, ...]
-    compile_time_args: tuple[ast.Constant | ast.Name, ...]
 
 
 @dataclasses.dataclass

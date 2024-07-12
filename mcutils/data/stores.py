@@ -111,11 +111,15 @@ class WritableStore(ReadableStore):
     """Represents something that stores some sort of data somewhere."""
 
 
-class PrimitiveStore(WritableStore):
+class PrimitiveReadableStore(ReadableStore):
     pass
 
 
-class ConstStore(ReadableStore):
+class PrimitiveWritableStore(WritableStore, PrimitiveReadableStore):
+    pass
+
+
+class ConstStore(PrimitiveReadableStore):
     """An expression that holds a compile-time constant."""
 
     def __init__(self, value: str):
@@ -130,7 +134,7 @@ class ConstInt(ConstStore[WholeNumberType]):
         super().__init__(str(value))
 
 
-class ScoreboardStore(PrimitiveStore[IntType]):
+class ScoreboardStore(PrimitiveWritableStore[IntType]):
     def __init__(self, player: str | strings.String, objective: str | strings.String):
         self.player = player
         self.objective = objective
@@ -149,7 +153,7 @@ class ScoreboardStore(PrimitiveStore[IntType]):
         yield self.objective
 
 
-class NbtStore(PrimitiveStore):
+class NbtStore(PrimitiveWritableStore):
     _nbt_container_type_literal = typing.Literal["block", "entity", "storage"]
 
     def __init__(self,

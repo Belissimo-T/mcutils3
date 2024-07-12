@@ -1,7 +1,7 @@
 STD_OBJECTIVE: ScoreboardObjective["mcutils"]
 
-STD_ARG: Nbt[AnyDataType, "storage", "mcutils:std", "arg"]
-STD_RET: Nbt[AnyDataType, "storage", "mcutils:std", "ret"]
+STD_ARG: StorageData["mcutils:std", "arg"]
+STD_RET: StorageData["mcutils:std", "ret"]
 # STD_ARG: Score["arg", STD_OBJECTIVE]
 # STD_RET: Score["ret", STD_OBJECTIVE]
 
@@ -69,7 +69,7 @@ def peek_any[stack_nr, index]():
         STD_STACK_RET_TAG
     )
 
-    v: Nbt[AnyDataType, "entity", STD_STACK_RET_SEL, "data.value"]
+    v: EntityData[STD_STACK_RET_SEL, "data.value"]
 
     # return value
     STD_RET = v
@@ -94,7 +94,7 @@ def push[stack_nr]():
     entity_stack_index: Score[STD_STACK_RET_SEL, STD_STACK_INDEX_OBJECTIVE] = stack_length
 
     # set value
-    v: Nbt[AnyDataType, "entity", STD_STACK_RET_SEL, "data.value"]
+    v: EntityData[STD_STACK_RET_SEL, "data.value"]
     v = STD_ARG
 
 
@@ -119,8 +119,7 @@ def _pop_any[stack_nr, index]():
 def exists[stack_nr: int, index]():
     peek_any[stack_nr, index]()
 
-    # TODO
-    out: Score["std_stack_exists_out", STD_OBJECTIVE] = 0
+    out: Score = 0
 
     "execute if entity %s run scoreboard players set %s %s 1" % (
         STD_STACK_RET_SEL,
@@ -225,6 +224,43 @@ def while_test3():
     print["[19]"]()
 
 
+def _while_test4(a):
+    log["_while_test4", "[", a, "] Called!"]()
+    if a <= 0:
+        log["_while_test4", "[", a, "] Returning!"]()
+        return
+
+    a_minus_1: Score
+    log["_while_test4", "[", a, "] Starting loop!"]()
+
+    i: Score = 0
+
+    while i < 1:
+        log["_while_test4", "[", a, "] i = ", {"color": "gold"}, i]()
+
+        STD_ARG = i
+        push[1]()
+        STD_ARG = a
+        push[1]()
+        a_minus_1 = a
+        a_minus_1 -= 1
+        log["_while_test4", "[", a, "] Calling _while_test4(", a_minus_1, ")!"]()
+        _while_test4(a_minus_1)
+        pop[1]()
+        a = STD_RET
+        log["_while_test4", "[", a, "] Returned from _while_test4(", a_minus_1, ")!"]()
+        pop[1]()
+        i = STD_RET
+
+        log["_while_test4", "[", a, "] i = ", i, " after pop"]()
+        i += 1
+        log["_while_test4", "[", a, "] i = ", i, " after increment, next iter!"]()
+
+
+def while_test4():
+    _while_test4(2)
+
+
 def _early_return_test():
     i: Score = 0
 
@@ -247,7 +283,7 @@ def early_return_test():
     log["early_return_test", "Done!"]()
 
 
-def sum(a: Score, b: Score):
+def sum(a: Int, b: Int):
     print["a = ", a]()
     print["b = ", b]()
     c: Score = a + b
@@ -331,6 +367,7 @@ def main():
     stackdump_test()
     while_test2()
     while_test3()
+    while_test4()
     primes_test()
     nbt_test()
     early_return_test()
@@ -341,20 +378,15 @@ def main():
 
 def fizz_buzz():
     i: Score = 1
-    div_3: Score
-    div_5: Score
 
     while i <= 100:
         print_var["i", i]()
 
-        div_3 = i % 3 == 0
-        div_5 = i % 5 == 0
-
-        if div_3 and div_5:
+        if i % 15 == 0:
             log["FB", "FizzBuzz"]()
-        elif div_3:
+        elif i % 3 == 0:
             log["FB", "Fizz"]()
-        elif div_5:
+        elif i % 5 == 0:
             log["FB", "Buzz"]()
 
         i += 1
@@ -423,10 +455,10 @@ def stackdump[stack_nr]():
 
     stack_length_copy: Score = stack_length
 
-    data_tmp: Nbt[AnyDataType, "storage", "mcutils:temp", "data"]
-    all_data: Nbt[AnyDataType, "entity", STD_STACK_RET_SEL, ""]
-    data: Nbt[AnyDataType, "storage", "mcutils:temp", "data.data"]
-    tags: Nbt[AnyDataType, "storage", "mcutils:temp", "data.Tags"]
+    data_tmp: StorageData["mcutils:temp", "data"]
+    all_data: EntityData[STD_STACK_RET_SEL, ""]
+    data: StorageData["mcutils:temp", "data.data"]
+    tags: StorageData["mcutils:temp", "data.Tags"]
 
     b: Score = stack_length_copy
     b -= i
@@ -494,8 +526,6 @@ def stackdump_test():
     pop[2]()
 
 
-
-
 # def primes(below):
 #     i = 1
 #
@@ -538,10 +568,10 @@ def primes_test():
 
 
 def nbt_test():
-    my_list: Nbt[ListType, "storage", "mcutils:temp", "my_list"] = "🏳️‍🌈"
+    my_list: List[StorageData["mcutils:temp", "my_list"]] = "🏳️‍🌈"
 
     print_var["my_list", my_list]()
 
-    my_list_len: Nbt[IntType, "storage", "mcutils:temp", "my_list_len"] = my_list
+    my_list_len: Int[StorageData["mcutils:temp", "my_list_len"]] = my_list
 
     print_var["len(my_list)", my_list_len]()
