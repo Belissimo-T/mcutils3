@@ -156,6 +156,10 @@ class UniqueScoreboardPlayer(UniqueString):
     category = "scoreboard_player"
 
 
+class UniqueNbtVariable(UniqueString):
+    category = "nbt_variable"
+
+
 @dataclasses.dataclass(frozen=True)
 class Comment(String):
     comment: str

@@ -1,3 +1,4 @@
+import decimal
 import typing
 
 from .stores import *
@@ -50,6 +51,13 @@ NbtStore[list[str]] -> NbtStore[str]:
  - sadly impossible
 """
 
+
+def float_to_decimal(f: float) -> str:
+    val = round(decimal.Decimal(f), 12).normalize()
+    exp = val.as_tuple().exponent
+    return f"{val:.{-exp if exp < 0 else 0}f}"
+
+
 STD_TEMP_OBJECTIVE = UniqueScoreboardObjective(LiteralString("mcutils_temp"))
 
 
@@ -65,7 +73,7 @@ def score_to_nbt(src: ScoreboardStore, dst: NbtStore[NumberType], scale: float =
     assert dst.dtype is not None
 
     return LiteralString(
-        f"execute store result {dst.nbt_container_type} %s %s {dst.dtype} {scale} "
+        f"execute store result {dst.nbt_container_type} %s %s {dst.dtype} {float_to_decimal(scale)} "
         f"run scoreboard players get %s %s",
 
         dst.nbt_container_argument, dst.path,
@@ -89,7 +97,8 @@ def nbt_to_score(src: NbtStore, dst: ScoreboardStore, scale: float = 1) -> Strin
 
     return LiteralString(
         f"execute store result score %s %s run data get {src.nbt_container_type} "
-        f"%s %s {scale}",
+        # item counting only works with omitted scale
+        f"%s %s" + (f" {float_to_decimal(scale)}" if scale != 1 else ""),
 
         dst.player, dst.objective,
         src.nbt_container_argument, src.path,
@@ -107,7 +116,7 @@ def nbt_to_same_nbt(src: NbtStore[T_concrete], dst: NbtStore[T_concrete]) -> Str
 
 def nbt_number_to_nbt_number(src: NbtStore[NumberType],
                              dst: NbtStore[NumberType]) -> String:
-    return nbt_to_nbt_execute_store(src, dst, scale=10e10, scale2=10e-10)
+    return nbt_to_nbt_execute_store(src, dst, scale=1e9, scale2=1e-9)
 
 
 def nbt_to_nbt_execute_store(src: NbtStore[CompoundType | ListType | StringType | NumberType],
@@ -118,8 +127,8 @@ def nbt_to_nbt_execute_store(src: NbtStore[CompoundType | ListType | StringType 
     assert scale is None or scale <= 2147483647
 
     return LiteralString(
-        f"execute store result {dst.nbt_container_type} %s %s {dst.dtype} {scale2} "
-        f"run data get {src.nbt_container_type} %s %s" + (f" {scale}" if scale is not None else ""),
+        f"execute store result {dst.nbt_container_type} %s %s {dst.dtype} {float_to_decimal(scale2)} "
+        f"run data get {src.nbt_container_type} %s %s" + (f" {float_to_decimal(scale)}" if scale is not None else ""),
         dst.nbt_container_argument, dst.path,
         src.nbt_container_argument, src.path,
     )
@@ -149,15 +158,6 @@ def nbt_to_nbt(src: NbtStore, dst: NbtStore, scale: float = 1) -> list[String]:
         # For example int -> Number = int -> int
         or dst.is_data_type(src.dtype_obj)
     ):
-        # if both are AnyDataType, we assume that they are the same
-        # if src.is_data_type(AnyDataType) and not dst.is_data_type(AnyDataType):
-        #     issue_warning(f"Assuming dtype of any-dtype source {src!r} is the same as any-dtype "
-        #                   f"destination {dst!r}.")
-
-        # if not dst.is_data_type(ConcreteDataType, AnyDataType):
-        #     issue_warning(f"Assuming dtype of destination {dst!r} with non-concrete dtype is the "
-        #                   f"same as source {src!r}.")
-
         assert scale == 1
         return [nbt_to_same_nbt(src, dst)]
 
@@ -222,8 +222,8 @@ def var_to_var(src: ReadableStore, dst: WritableStore, scale: float = 1) -> list
     raise CompilationError(f"Cannot set {src!r} to {dst!r}.")
 
 
-def add_const_to_score(src: ScoreboardStore, increment: ConstStore[NumberType], scale: float = 1) -> list[String]:
-    val = int(int(increment.value) * scale)
+def add_const_to_score(src: ScoreboardStore, increment: ConstStore[NumberType]) -> list[String]:
+    val = int(float(increment.value))
 
     if val < 0:
         return [
@@ -235,50 +235,45 @@ def add_const_to_score(src: ScoreboardStore, increment: ConstStore[NumberType], 
     ]
 
 
-def add_const(src: WritableStore[NumberType], increment: ConstStore[NumberType]) -> list[String]:
-    if isinstance(src, ScoreboardStore):
-        return add_const_to_score(src, increment)
+def add_const(dst: WritableStore[NumberType], increment: ConstStore[NumberType]) -> list[String]:
+    if isinstance(dst, ScoreboardStore):
+        return add_const_to_score(dst, increment)
 
-    if isinstance(src, NbtStore):
-        if not src.is_data_type(NumberType, DataType):
-            raise CompilationError(f"Cannot add {increment!r} to non-NumberType {src!r}.")
+    if isinstance(dst, NbtStore):
+        if not dst.is_data_type(NumberType, DataType):
+            raise CompilationError(f"Cannot add {increment!r} to non-NumberType {dst!r}.")
 
-        if src.is_data_type(ConcreteDataType):
-            if src.dtype == "double":
-                temp_tag = UniqueTag(LiteralString("add_const_to_double_temp"))
-                temp_sel = LiteralString("@e[tag=%s, limit=1]", temp_tag)
+        if dst.is_data_type(DoubleType, FloatType):
+            temp_tag = UniqueTag(LiteralString("add_const_to_double_temp"))
+            temp_sel = LiteralString("@e[tag=%s, limit=1]", temp_tag)
 
-                return [
-                    # 1. summon an entity
-                    LiteralString('summon minecraft:marker 0 0 0 {Tags:["%s"]}', temp_tag),
+            return [
+                # 1. summon an entity
+                LiteralString('summon minecraft:marker 0 0 0 {Tags:["%s"]}', temp_tag),
 
-                    # 2. set pos
-                    LiteralString('data modify entity %s Pos[0] set from %s %s %s', temp_sel, *src),
+                # 2. set pos
+                LiteralString('data modify entity %s Pos[0] set from %s %s %s', temp_sel, *dst),
 
-                    # 3. tp by increment
-                    LiteralString(f"execute as %s at @s run tp @s ~{increment.value} ~ ~", temp_sel),
+                # 3. tp by increment
+                LiteralString(f"execute as %s at @s run tp @s ~{increment.value} ~ ~", temp_sel),
 
-                    # 4. read pos
-                    *var_to_var(NbtStore[DoubleType]("entity", temp_sel, "Pos[0]"), src),
+                # 4. read pos
+                *var_to_var(NbtStore[DoubleType]("entity", temp_sel, "Pos[0]"), dst),
 
-                    # 5. kill
-                    LiteralString("kill %s", temp_sel)
-                ]
-        if src.is_data_type(WholeNumberType):
-            scale = 1
+                # 5. kill
+                LiteralString("kill @e[tag=%s]", temp_tag)
+            ]
+        elif dst.is_data_type(WholeNumberType):
+            temp_var = ScoreboardStore("add_const_to_nbt", STD_TEMP_OBJECTIVE)
+            return [
+                *var_to_var(dst, temp_var),
+                *add_const_to_score(temp_var, increment),
+                *var_to_var(temp_var, dst),
+            ]
         else:
-            scale = 1e9
+            raise CompilationError(f"Adding to an unknown-dtype NbtStore is not supported.")
 
-        temp_var = ScoreboardStore("add_const_to_nbt", STD_TEMP_OBJECTIVE)
-        return [
-            *var_to_var(src, temp_var, scale=scale),
-            *add_const_to_score(temp_var, increment, scale=scale),
-            *var_to_var(temp_var, src, scale=1 / scale),
-        ]
-
-        raise CompilationError(f"Adding to an unknown-dtype NbtStore is not supported yet.")
-
-    raise CompilationError(f"Cannot add {increment!r} to {src!r}.")
+    raise CompilationError(f"Cannot add {increment!r} to {dst!r}.")
 
 
 def score_score_op_in_place(dst: ScoreboardStore,

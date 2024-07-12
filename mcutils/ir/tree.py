@@ -110,9 +110,11 @@ def compile_time_args_to_str(args: tuple) -> str:
                     f"score_{v.player._id}_{v.objective._id}"
                 )
             case stores.NbtStore() as v:
-                outs.append(
-                    f"nbt_{v.nbt_container_type}_{v.nbt_container_argument._id}_{v.path}"
-                )
+                outs.append((
+                    f"nbt_{v.nbt_container_type}_"
+                    f"{v.nbt_container_argument if isinstance(v.nbt_container_argument, str) else v.nbt_container_argument._id}_"
+                    f"{v.path if isinstance(v.path, str) else v.path._id}"
+                ))
             case str(s):
                 outs.append(base64.b32encode(s.encode()).decode().lower().replace("=", "_"))
             case _:
@@ -220,7 +222,8 @@ def parse_expression(node: ast.expr, context: Scope) -> stores.ReadableStore:
                     player=player,
                     objective=objective
                 )
-            case NbtType(dtype=dtype, type=type_, arg=arg, path=path) if type_ is not None and arg is not None and path is not None:
+            case NbtType(dtype=dtype, type=type_, arg=arg,
+                         path=path) if type_ is not None and arg is not None and path is not None:
                 return stores.NbtStore[dtype](type_, arg, path)
             case _:
                 raise CompilationError(f"Invalid expression {ast.unparse(node)}")
@@ -307,7 +310,7 @@ def unpack_annotation(node: ast.expr) -> tuple[type[stores.DataType], ast.expr |
     }
 
     match node:
-        case ast.Subscript(value=ast.Name(id=name), slice=ast.Subscript() as inner):
+        case ast.Subscript(value=ast.Name(id=name), slice=ast.Subscript() | ast.Name() as inner):
             try:
                 return types_by_name[name], inner
             except KeyError as e:
@@ -337,7 +340,7 @@ def parse_annotation(ann: ast.expr, context: Scope) -> VariableType:
             return LocalScopeType(dtype)
 
         case None:
-            return NbtType(stores.AnyDataType)
+            return UnspecifiedVariableType(dtype)
 
         case ast.Subscript(value=ast.Name(id="StorageData"), slice=ast.Tuple(elts=[
             name_str,
@@ -354,6 +357,8 @@ def parse_annotation(ann: ast.expr, context: Scope) -> VariableType:
             ast.Constant(value=str(path))
         ])):
             return NbtType(dtype, "block", parse_string(location_str, context), path)
+        case ast.Name(id="Nbt"):
+            return NbtType(dtype)
 
         case _:
             raise CompilationError(f"Invalid annotation {ast.unparse(ann)}.")
@@ -401,6 +406,11 @@ class VariableType:
 
 class StringType(VariableType):
     ...
+
+
+@dataclasses.dataclass
+class UnspecifiedVariableType(VariableType):
+    dtype: typing.Type[stores.DataType]
 
 
 @dataclasses.dataclass
@@ -465,7 +475,7 @@ class TreeFunction:
                     scope.variable_types[name] = parse_annotation(ann, scope)
                 case ast.Assign(targets=[ast.Name(id=name)]):
                     if name not in scope.variable_types:
-                        scope.variable_types[name] = NbtType(stores.AnyDataType)
+                        scope.variable_types[name] = UnspecifiedVariableType(stores.AnyDataType)
                 case ast.If(test=test, body=body, orelse=orelse):
                     cls.search_for_var_types(body, scope)
                     cls.search_for_var_types(orelse, scope)
@@ -474,37 +484,50 @@ class TreeFunction:
                 case _:
                     pass
 
-    @staticmethod
-    def assign_symbols(var_types: dict[str, VariableType]):
+    @classmethod
+    def assign_symbols(cls, var_types: dict[str, VariableType]):
         symbols = {}
 
         for name, var_type in var_types.items():
-            match var_type:
-                case ScoreType(player=None, objective=None):
-                    symbols[name] = std.get_temp_var("__var_" + name)
-                case ScoreType(player=None, objective=obj):
-                    symbols[name] = stores.ScoreboardStore(
-                        strings.UniqueScoreboardPlayer(strings.LiteralString("__var_" + name)),
-                        obj
-                    )
-                case ScoreType(player=player, objective=None):
-                    symbols[name] = stores.ScoreboardStore(player, std.MCUTILS_STD_OBJECTIVE)
-                case ScoreType(player=player, objective=obj):
-                    symbols[name] = stores.ScoreboardStore(player, obj)
-                case NbtType(dtype=dtype, type=type_, arg=arg, path=path):
-                    if type_ is None:
-                        type_ = "storage"
-                        arg = "mcutils:temp"
-                        path = strings.LiteralString("vars.%s", strings.UniqueTag(strings.LiteralString(name)))
-
-                    symbols[name] = stores.NbtStore[dtype](type_, arg, path)
-                case LocalScopeType():
-                    compile_assert(False)
-                    # scope.symbols[name] = stores.LocalScopeStore(var_type.dtype)
-                case _:
-                    raise CompilationError(f"Invalid variable type {var_type!r}.")
+            symbols[name] = cls.get_store_from_variable_type(name, var_type)
 
         return symbols
+
+    @classmethod
+    def get_store_from_variable_type(
+        cls,
+        name: str,
+        var_type: VariableType,
+    ) -> stores.ReadableStore | stores.WritableStore:
+        match var_type:
+            case ScoreType(player=None, objective=None):
+                return std.get_temp_var("__var_" + name)
+            case ScoreType(player=None, objective=obj):
+                return stores.ScoreboardStore(
+                    strings.UniqueScoreboardPlayer(strings.LiteralString("__var_" + name)),
+                    obj
+                )
+            case ScoreType(player=player, objective=None):
+                return stores.ScoreboardStore(player, std.MCUTILS_STD_OBJECTIVE)
+            case ScoreType(player=player, objective=obj):
+                return stores.ScoreboardStore(player, obj)
+            case UnspecifiedVariableType(dtype=dtype):
+                if dtype is stores.IntType:
+                    return cls.get_store_from_variable_type(name, ScoreType())
+                else:
+                    return cls.get_store_from_variable_type(name, NbtType(dtype=dtype))
+            case NbtType(dtype=dtype, type=type_, arg=arg, path=path):
+                if type_ is None:
+                    type_ = "storage"
+                    arg = strings.LiteralString("mcutils:temp")
+                    path = strings.LiteralString("vars.%s", strings.UniqueNbtVariable(strings.LiteralString(name)))
+
+                return stores.NbtStore[dtype](type_, arg, path)
+            case LocalScopeType():
+                compile_assert(False)
+                # scope.return stores.LocalScopeStore(var_type.dtype)
+            case _:
+                raise CompilationError(f"Invalid variable type {var_type!r}.")
 
 
 def parse_unary_op(node: ast.UnaryOp):

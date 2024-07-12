@@ -149,11 +149,30 @@ class BlockedFunction:
 
             block.statements = new2_statements
 
+        used_blocks = out.get_used_blocks(out.entry_point)
+
+        out.blocks = {k: v for k, v in out.blocks.items() if k in used_blocks}
+
+        return out
+
+    def _get_used_blocks(self, block: tuple[str, ...], out: set[tuple[str, ...]]):
+        if block in out:
+            return
+
+        out.add(block)
+
+        for call in self.blocks[block].get_calls():
+            self._get_used_blocks(call, out)
+
+    def get_used_blocks(self, block: tuple[str, ...]) -> set[tuple[str, ...]]:
+        out = set()
+        self._get_used_blocks(block, out)
         return out
 
     @staticmethod
-    def transform_returns(statements: list[tree_statements_base.Statement]) -> list[
-        tree_statements_base.Statement]:
+    def transform_returns(
+        statements: list[tree_statements_base.Statement]
+    ) -> list[tree_statements_base.Statement]:
         out = []
 
         for statement in statements:
@@ -180,8 +199,10 @@ class BlockedFunction:
         return out
 
     @staticmethod
-    def transform_stack_ops(statements: list[tree_statements_base.Statement], std_lib_config: StdLibConfig) -> list[
-        tree_statements_base.Statement]:
+    def transform_stack_ops(
+        statements: list[tree_statements_base.Statement],
+        std_lib_config: StdLibConfig
+    ) -> list[tree_statements_base.Statement]:
         out = []
 
         for statement in statements:
@@ -238,6 +259,18 @@ class Block:
     statements: list[tree_statements_base.Statement]
     continuation_info: ContinuationInfo
     parent_block: tuple[str, ...] | None = None
+
+    def get_calls(self) -> list[tuple[str, ...]]:
+        out = []
+        for statement in self.statements:
+            match statement:
+                case BlockCallStatement(block=block):
+                    out.append(block)
+                case ConditionalBlockCallStatement(true_block=true_block):
+                    out.append(true_block)
+                case _:
+                    pass
+        return out
 
 
 @dataclasses.dataclass

@@ -1,4 +1,12 @@
 - [ ] imports
-- [ ] locals
+- [ ] recursion
+  - [ ] locals
 - [ ] fstrings
-- [X] eliminate STD_ARG/STD_RET
+- [ ] decorators (load, tick)
+- [ ] function return types
+- [ ] dtype for ConstStore
+- [ ] unary op
+
+...
+
+- [ ] For-Loops/Iterators/OOP

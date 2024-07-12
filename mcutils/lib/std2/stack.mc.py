@@ -124,26 +124,29 @@ def exists[stack_nr: int, index]():
 
 
 def while_test():
-    a: Score = 1
+    i: Int = 1
 
-    while a < 1048577:
-        print_var["a", a]()
-        a *= 2
+    while i < 5:
+        print_var["i", i]()
+        i += 1
+        print_var["i + 1", i]()
 
     log["while_test", "Done!"]()
 
 
 def while_test2():
-    i: Score
-    j: Score
+    i: Int
+    j: Int
 
     i = 0
     while i < 5:
         j = 0
         while j < 5:
-            print[{"color": "light_purple"}, "i", {"color": "gray"}, " = ", {"color": "gold"}, i, {
-                "color": "gray"}, ", ", {"color": "light_purple"}, "j", {"color": "gray"}, " = ", {
-                "color": "gold"}, j]()
+            print[
+                {"color": "light_purple"}, "i", {"color": "gray"}, " = ", {"color": "gold"}, i,
+                {"color": "gray"}, ", ", {"color": "light_purple"}, "j", {"color": "gray"}, " = ", {
+                "color": "gold"}, j
+            ]()
             j += 1
         i += 1
 
@@ -255,7 +258,7 @@ def while_test3():
 
 
 def _early_return_test():
-    i: Score = 0
+    i: Int = 0
 
     while i < 5:
         print_var["i", i]()
@@ -285,8 +288,6 @@ def sum(a: Int, b: Int):
 
 
 def sum_test():
-    c: Score
-
     c = sum(1, 2)
     print["c = ", c]()
 
@@ -335,13 +336,13 @@ def stack_test[stack_nr]():
 
     # stackdump[stack_nr]()
 
-    peek_val: Score = peek[stack_nr]()
+    peek_val = peek[stack_nr]()
     print_var["peek", peek_val]()
 
-    ret: Score = pop[stack_nr]()
+    ret = pop[stack_nr]()
     print_var["ret", ret]()
 
-    ret: Score = pop[stack_nr]()
+    ret = pop[stack_nr]()
     print_var["ret", ret]()
 
 
@@ -369,7 +370,7 @@ def main():
 
 
 def fizz_buzz():
-    i: Score = 1
+    i: Int = 1
 
     while i <= 100:
         print_var["i", i]()
@@ -385,8 +386,8 @@ def fizz_buzz():
 
 
 def collatz():
-    n: Score = 237894234
-    i: Score = 1
+    n: Int = 237894234
+    i: Int = 1
 
     while n != 1:
         print[
@@ -424,8 +425,7 @@ def min_stack_i[stack_nr: int]():
     #     log["min_stack_i", {"color": "red"}, "min_stack_i does not work with stack_nr == 1!"]()
     #     return 0
 
-    stack_length: Score[tag_of_stack_nr[stack_nr](), STD_STACK_OBJECTIVE]
-    stack_length_copy: Score = stack_length
+    stack_length_copy: Int = Score[tag_of_stack_nr[stack_nr](), STD_STACK_OBJECTIVE]
     i: Score = 0
 
     while i < stack_length_copy:
@@ -439,12 +439,13 @@ def min_stack_i[stack_nr: int]():
 
 
 def stackdump[stack_nr]():
-    i: Score = min_stack_i[stack_nr]()
+    i: Int = min_stack_i[stack_nr]()
     # print_var["min_stack_i", i]()
-    stack_length: Score[tag_of_stack_nr[stack_nr](), STD_STACK_OBJECTIVE]
 
-    num_elements: Score = stack_length - i + 1
+    stack_length: Score[tag_of_stack_nr[stack_nr](), STD_STACK_OBJECTIVE]
+    num_elements: Int = stack_length - i + 1
     # print_var["stack_length", stack_length_copy]()
+
     print[
         {"underlined": True}, "Enumerating ",
         {"color": "gold"}, num_elements,
@@ -500,12 +501,12 @@ def stackdump_test():
 
 
 def primes_test():
-    i: Score = 2
+    i: Int = 2
 
     while i < 100:
-        isprime: Score = 1
+        isprime: Int = 1
 
-        x: Score = 2
+        x: Int = 2
         while x < i:
             if i % x == 0:
                 isprime = 0
@@ -522,10 +523,28 @@ def primes_test():
 
 
 def nbt_test():
-    my_list: List[StorageData["mcutils:temp", "my_list"]] = "🏳️‍🌈"
+    a: String = "🏳️‍🌈"
+    print_var["a", a]()
 
-    print_var["my_list", my_list]()
+    a_len: Int = a
+    print_var["len(a)", a_len]()
 
-    my_list_len: Int[StorageData["mcutils:temp", "my_list_len"]] = my_list
+    a_double: Double = 0.5
+    print_var["a", a_double]()
+    a_double += 1
+    print_var["a+1", a_double]()
 
-    print_var["len(my_list)", my_list_len]()
+    a_float: Float = 0.5
+    print_var["a", a_float]()
+    a_float += 1
+    print_var["a+1", a_float]()
+
+    a_int: Int[Nbt] = 42
+    print_var["a", a_int]()
+    a_int += 1
+    print_var["a+1", a_int]()
+
+    b: Compound = {"a": 1, "b": 2}
+    print_var["a", b]()
+    a_len = b
+    print_var["len(a)", a_len]()

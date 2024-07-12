@@ -163,7 +163,7 @@ class NbtStore(PrimitiveWritableStore):
                  path: str | strings.String = "{}"):
         self.nbt_container_type = nbt_container_type
         self.nbt_container_argument = nbt_container_argument
-        self.path = "{}" if not path else path
+        self.path: str | strings.String = "{}" if not path else path
 
     def __iter__(self):
         yield self.nbt_container_type

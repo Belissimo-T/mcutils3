@@ -92,12 +92,11 @@ class CompileNamespace:
                     self.command_functions[func_path].process(
                         func=self.blocked_functions[func_path],
                         functions=self.command_functions,
-                        scope=scope,
                     )
                     stack.pop(i)
                     processed_command_functions.add(func_path)
                     # breakpoint()
-                    print(f" -> Done! {func_path} with {dependencies}.")
+                    print(f" -> Done! {func_path}")
                     changed = True
                     break
                 else:
@@ -122,7 +121,6 @@ class CommandFunction:
         self,
         func: blocks.BlockedFunction,
         functions: dict[tuple[str, ...], CommandFunction],
-        scope: tree.Scope,
     ):
         for path, block in func.blocks.items():
             commands = []
