@@ -34,13 +34,14 @@ def fetch(
         temp_vars: list[stores.PrimitiveReadableStore] = []
         for i, arg in enumerate(src.args):
             if isinstance(arg, stores.PrimitiveReadableStore):
+                # TODO: This does not hold for recursion, I believe
                 temp_vars.append(arg)
             else:
                 temp_var = get_temp_var(i).with_dtype(arg.dtype_obj)
                 temp_vars.append(temp_var)
 
                 out += [
-                    *fetch(arg, _FETCH_TEMP),
+                    *fetch(arg, _FETCH_TEMP.with_dtype(arg.dtype_obj)),
                     tree.StackPushStatement(_FETCH_TEMP),
                 ]
                 out2 += [
@@ -176,7 +177,14 @@ class BinOpExpression(ExpressionBase):
 
     @property
     def dtype_obj(self) -> typing.Type[stores.DataType]:
-        return stores.AnyDataType
+        if self.left.is_data_type(stores.WholeNumberType) and self.right.is_data_type(stores.WholeNumberType):
+            if self.left.is_data_type(stores.IntType) or self.right.is_data_type(stores.IntType):
+                # TODO: This is incorrect!
+                return stores.IntType
+
+            return stores.WholeNumberType
+        else:
+            return stores.AnyDataType
 
 
 @dataclasses.dataclass

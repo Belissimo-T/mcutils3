@@ -292,13 +292,15 @@ def sum(a: Int, b: Int):
 
 
 def sum_test():
-    c: Score = sum(1, 2)
+    c: Score
+
+    c = sum(1, 2)
     print["c = ", c]()
 
-    c: Score = sum(2, -3)
+    c = sum(2, -3)
     print["c = ", c]()
 
-    c: Score = sum(52, 56)
+    c = sum(52, 56)
     print["c = ", c]()
 
 
@@ -398,8 +400,9 @@ def collatz():
 
     while n != 1:
         print[
-            "n", {"color": "gray"}, "[", {"color": "light_purple"}, i, {"color": "gray"}, "]", {"color": None}, " = ", {
-                "color": "gold"}, n]()
+            "n", {"color": "gray"}, "[", {"color": "light_purple"}, i, {"color": "gray"}, "]",
+            {"color": None}, " = ", {"color": "gold"}, n
+        ]()
         if n % 2 == 0:
             n /= 2
         else:
@@ -434,13 +437,12 @@ def min_stack_i[stack_nr: int]():
     stack_length: Score[tag_of_stack_nr[stack_nr](), STD_STACK_OBJECTIVE]
     stack_length_copy: Score = stack_length
     i: Score = 0
-    does_exist: Score
 
-    while i < stack_length:
+    while i < stack_length_copy:
         # print_var["i", i]()
         exists[stack_nr, i]()
 
-        does_exist = STD_RET
+        does_exist: Score = STD_RET
 
         if does_exist:
             # log["min_stack_i", "Returning ", {"color": "gold"}, i, {"color": None}, "."]()
@@ -453,22 +455,12 @@ def stackdump[stack_nr]():
     i: Score = min_stack_i[stack_nr]()
     # print_var["min_stack_i", i]()
     stack_length: Score[tag_of_stack_nr[stack_nr](), STD_STACK_OBJECTIVE]
-    does_exist: Score
 
-    stack_length_copy: Score = stack_length
-
-    data_tmp: StorageData["mcutils:temp", "data"]
-    all_data: EntityData[STD_STACK_RET_SEL, ""]
-    data: StorageData["mcutils:temp", "data.data"]
-    tags: StorageData["mcutils:temp", "data.Tags"]
-
-    b: Score = stack_length_copy
-    b -= i
-    b += 1
+    num_elements: Score = stack_length - i + 1
     # print_var["stack_length", stack_length_copy]()
     print[
         {"underlined": True}, "Enumerating ",
-        {"color": "gold"}, b,
+        {"color": "gold"}, num_elements,
         {"color": None}, " elements of stack ",
         {"color": "light_purple"}, stack_nr,
         {"color": None}, " starting with ",
@@ -478,13 +470,11 @@ def stackdump[stack_nr]():
 
     set_max_command_chain_length()
 
-    while i <= stack_length_copy:
+    while i <= stack_length:
         exists[stack_nr, i]()
-        does_exist = STD_RET
+        does_exist: Score = STD_RET
 
         peek_any[stack_nr, i]()
-
-        data_tmp = all_data
 
         if does_exist:
             print[
@@ -529,44 +519,25 @@ def stackdump_test():
     pop[2]()
 
 
-# def primes(below):
-#     i = 1
-#
-#     while i < below:
-#         isprime = True
-#
-#         for x in range(2, i):
-#             if i % x == 0:
-#                 isprime = False
-#                 # break
-#
-#         if isprime:
-#             print(i)
-#
-#         i += 1
-
 def primes_test():
-    below: Score = 25
-    i: Score = 1
-    isprime: Score
-    x: Score
+    i: Score = 2
 
-    while i < below:
-        isprime = 1
+    while i < 100:
+        isprime: Score = 1
 
-        x = 2
+        x: Score = 2
         while x < i:
             if i % x == 0:
                 isprime = 0
-                # break
+                break
 
             x += 1
 
         if isprime:
             print["i", {"color": "gray"}, " = ", {"color": "gold"}, i, {"color": None}, " PRIME"]()
         else:
-            print["i", {"color": "gray"}, " = ", {"color": "gold"}, i]()
-
+            # print["i", {"color": "gray"}, " = ", {"color": "gold"}, i]()
+            pass
         i += 1
 
 

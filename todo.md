@@ -2,4 +2,3 @@
 - [ ] locals
 - [ ] fstrings
 - [ ] eliminate STD_ARG/STD_RET
-- [X] eliminate tree.Expression
