@@ -150,7 +150,6 @@ class BlockedFunction:
             block.statements = new2_statements
 
         used_blocks = out.get_used_blocks(out.entry_point)
-
         out.blocks = {k: v for k, v in out.blocks.items() if k in used_blocks}
 
         return out
@@ -231,7 +230,7 @@ class BlockedFunction:
         return out
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class ContinuationInfo:
     return_: tuple[str, ...] | None
     default: tuple[str, ...] | None = None

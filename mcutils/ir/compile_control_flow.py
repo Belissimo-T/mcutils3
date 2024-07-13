@@ -88,8 +88,12 @@ def transform_conditionals(mcfunctions: dict[tuple[str, ...], blocks.Block]) -> 
                 mcfunction_children |= {
                     (f"{current_child_i}",): current_child
                 }
+
                 current_child_i += 1
-                current_child.continuation_info.default = None  # this mcfunction ends here
+                while (*mcfunction_name, f"{current_child_i}") in mcfunctions:
+                    current_child_i += 1
+
+                current_child.continuation_info = current_child.continuation_info.with_(default=None)
 
                 if node.no_redirect_branches:
                     pass

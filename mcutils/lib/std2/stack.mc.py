@@ -145,7 +145,7 @@ def while_test2():
             print[
                 {"color": "light_purple"}, "i", {"color": "gray"}, " = ", {"color": "gold"}, i,
                 {"color": "gray"}, ", ", {"color": "light_purple"}, "j", {"color": "gray"}, " = ", {
-                "color": "gold"}, j
+                    "color": "gold"}, j
             ]()
             j += 1
         i += 1
@@ -364,6 +364,7 @@ def main():
     primes_test()
     nbt_test()
     early_return_test()
+    fact_test()
     # fib_test()
 
     # a[1]()
@@ -548,3 +549,38 @@ def nbt_test():
     print_var["a", b]()
     a_len = b
     print_var["len(a)", a_len]()
+
+
+def fact(num: Int):
+    a: Int = num
+    # log["fact", "a = ", {"color": "gold"}, a, {"color": None}, "."]()
+
+    if a > 10:
+        # log["fact", "a > 10, returning -1!"]()
+        return -1
+
+    if a == 0:
+        # log["fact", "a == 0, returning 1!"]()
+        return 1
+
+    out: Int = 1
+    i: Int = 1
+
+    while i <= a:
+        # print_var["out", out]()
+        # print_var["i", i]()
+        out *= i
+        i += 1
+        # print_var["out*i", out]()
+        # print_var["i+1", i]()
+
+    return out
+
+
+def fact_test():
+    x: Int = 0
+    while x <= 11:
+        out = fact(x)
+        print[{"color": "gray"}, "fact(", {"color": "light_purple"}, x, {"color": "gray"}, ") = ", {
+            "color": "gold"}, out]()
+        x += 1
