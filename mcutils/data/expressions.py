@@ -10,7 +10,6 @@ from .. import strings
 from ..data import stores
 from ..errors import compile_assert
 from ..ir import blocks, tree, tree_statements_base
-from ..lib import std
 
 _ARG_PRIMITIVES: dict[int, stores.NbtStore[stores.AnyDataType]] = {}
 _FETCH_TEMP = stores.NbtStore[stores.AnyDataType]("storage", "mcutils:expr_temp", "fetch")
@@ -105,9 +104,9 @@ class BinOpExpression(ExpressionBase):
     op: typing.Literal["+", "-", "*", "/", "%", "==", "!=", "<", ">", "<=", ">=", "and", "or"]
     right: stores.ReadableStore
 
-    _TEMP1: typing.ClassVar = std.get_temp_var("expr_temp1")
-    _TEMP2: typing.ClassVar = std.get_temp_var("expr_temp2")
-    _TEMP3: typing.ClassVar = std.get_temp_var("expr_temp3")
+    _TEMP1: typing.ClassVar = object_model.get_temp_var("expr_temp1")
+    _TEMP2: typing.ClassVar = object_model.get_temp_var("expr_temp2")
+    _TEMP3: typing.ClassVar = object_model.get_temp_var("expr_temp3")
 
     @property
     def args(self):

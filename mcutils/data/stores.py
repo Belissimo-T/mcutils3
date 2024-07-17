@@ -28,20 +28,20 @@ class WholeNumberType(NumberType):
     """A whole number such as a byte, short, int or long."""
 
 
-class ByteType(WholeNumberType, ConcreteDataType):
-    dtype = "byte"
+class LongType(WholeNumberType, ConcreteDataType):
+    dtype = "long"
 
 
-class ShortType(WholeNumberType, ConcreteDataType):
-    dtype = "short"
-
-
-class IntType(WholeNumberType, ConcreteDataType):
+class IntType(LongType):
     dtype = "int"
 
 
-class LongType(WholeNumberType, ConcreteDataType):
-    dtype = "long"
+class ShortType(IntType):
+    dtype = "short"
+
+
+class ByteType(ShortType):
+    dtype = "byte"
 
 
 class RealNumberType(NumberType):

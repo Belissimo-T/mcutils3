@@ -7,10 +7,9 @@ import typing
 from . import tree, compile_control_flow
 from ..data import stores, expressions, object_model
 from ..errors import compile_assert
-from ..lib import std
 from ..ir import tree_statements_base
 
-_IF_TEMP = std.get_temp_var("conditional")
+_IF_TEMP = object_model.get_temp_var("conditional")
 
 
 @dataclasses.dataclass

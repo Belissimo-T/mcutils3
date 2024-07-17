@@ -1,16 +1,16 @@
 from __future__ import annotations
 
 import base64
+import dataclasses
+import itertools
+import typing
 
 import ast_comments as ast
-import dataclasses
-import typing
 
 from .tree_statements_base import Statement, StoppingStatement, ContinueStatement, BreakStatement
 from ..data import stores, object_model, expressions
 from ..errors import CompilationError, compile_assert
 from .. import strings, nbt
-from ..lib import std
 
 
 @dataclasses.dataclass
@@ -123,14 +123,28 @@ def compile_time_args_to_str(args: tuple) -> str:
     return "_".join(outs)
 
 
+@dataclasses.dataclass(frozen=True)
+class ImportSpecifier:
+    level: int
+    path: tuple[str, ...]
+
+    @classmethod
+    def from_module_name(cls, name: str, level: int) -> ImportSpecifier:
+        return cls(level, tuple(name.split(".")))
+
+
 @dataclasses.dataclass
 class File:
     function_templates: dict[tuple[str, ...], FunctionTemplate]
     scope: Scope
+    imports: dict[ImportSpecifier, tuple[str, ...]]
+    path: tuple[str, ...]
 
     @classmethod
-    def from_py_ast(cls, node: ast.Module, py_library: typing.Type | None):
+    def from_py_ast(cls, node: ast.Module, py_library: object, path: tuple[str, ...]):
         scope = Scope(pyfuncs={f: getattr(py_library, f) for f in py_library.__pyfuncs__})
+
+        imports = {}
 
         function_templates = {}
 
@@ -156,12 +170,20 @@ class File:
                     scope.variable_types[name] = parse_annotation(ann, scope)
                 case ast.Comment():
                     pass
+                case ast.Import(names=[ast.alias(name=name, asname=None)]):
+                    imports[ImportSpecifier.from_module_name(name, 0)] = ()
+                case ast.Import(names=[ast.alias(name=name, asname=asname)]):
+                    imports[ImportSpecifier.from_module_name(name, 0)] = asname,
+                case ast.ImportFrom(module=module, level=level, names=[ast.alias(name="*")]):
+                    imports[ImportSpecifier.from_module_name(module, level)] = ()
+                # case ast.ImportFrom(module=module, level=level, names=[ast.alias(name=name, asname=asname)]):
+                #     imports[ImportSpecifier.from_module_name(module + (name,), level)] = asname,
                 case _:
-                    raise CompilationError(f"Invalid statement {stmt!r} in namespace {ast!r}")
+                    raise CompilationError(f"Invalid statement: {ast.unparse(stmt)}")
 
         scope.add(variables=TreeFunction.assign_symbols(scope.variable_types))
 
-        return cls(function_templates, scope)
+        return cls(function_templates, scope, imports, path)
 
 
 def _parse_statement(node: ast.stmt, context: Scope) -> list[Statement]:
@@ -501,14 +523,14 @@ class TreeFunction:
     ) -> stores.ReadableStore | stores.WritableStore:
         match var_type:
             case ScoreType(player=None, objective=None):
-                return std.get_temp_var("__var_" + name)
+                return object_model.get_temp_var("__var_" + name)
             case ScoreType(player=None, objective=obj):
                 return stores.ScoreboardStore(
                     strings.UniqueScoreboardPlayer(strings.LiteralString("__var_" + name)),
                     obj
                 )
             case ScoreType(player=player, objective=None):
-                return stores.ScoreboardStore(player, std.MCUTILS_STD_OBJECTIVE)
+                return stores.ScoreboardStore(player, object_model.MCUTILS_STD_OBJECTIVE)
             case ScoreType(player=player, objective=obj):
                 return stores.ScoreboardStore(player, obj)
             case UnspecifiedVariableType(dtype=dtype):

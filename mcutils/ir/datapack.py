@@ -1,5 +1,6 @@
 import dataclasses
 import pathlib
+import shutil
 
 import beet
 
@@ -40,6 +41,7 @@ class Datapack:
                     # noinspection PyTypeChecker
                     out[mcfunc.location.to_str()] = beet.Function("\n".join(commands), tags=[])
 
+        shutil.rmtree(out.path, ignore_errors=True)
         out.save(overwrite=True)
 
         return out

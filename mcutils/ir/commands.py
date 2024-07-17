@@ -26,10 +26,10 @@ class CompileNamespace:
             scope=namespace.scope
         )
 
-    def resolve_templates(self, start: list[str], std_lib_config: blocks.StdLibConfig | None = None):
+    def resolve_templates(self, start: list[tuple[str, ...]], std_lib_config: blocks.StdLibConfig | None = None):
         stack: list[tuple[tuple[str, ...], tuple]] = (
             [std_lib_config.stack_peek, std_lib_config.stack_pop, std_lib_config.stack_push]
-            + [((name,), ()) for name in start]
+            + [(name, ()) for name in start]
         )
         processed_command_functions: set[tuple[str, ...]] = set()
 

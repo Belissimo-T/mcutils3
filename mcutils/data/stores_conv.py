@@ -53,12 +53,19 @@ NbtStore[list[str]] -> NbtStore[str]:
 
 
 def float_to_decimal(f: float) -> str:
-    val = round(decimal.Decimal(f), 12).normalize()
+    val = decimal.Decimal(f).quantize(decimal.Decimal("1e-16"), context=decimal.Context(prec=32)).normalize()
     exp = val.as_tuple().exponent
     return f"{val:.{-exp if exp < 0 else 0}f}"
 
 
 STD_TEMP_OBJECTIVE = UniqueScoreboardObjective(LiteralString("mcutils_temp"))
+
+
+def swap_scores(a: ScoreboardStore, b: ScoreboardStore) -> String:
+    return LiteralString(
+        "scoreboard players operation %s %s >< %s %s",
+        a.player, a.objective, b.player, b.objective
+    )
 
 
 def score_to_score(src: ScoreboardStore, dst: ScoreboardStore) -> String:
@@ -116,7 +123,7 @@ def nbt_to_same_nbt(src: NbtStore[T_concrete], dst: NbtStore[T_concrete]) -> Str
 
 def nbt_number_to_nbt_number(src: NbtStore[NumberType],
                              dst: NbtStore[NumberType]) -> String:
-    return nbt_to_nbt_execute_store(src, dst, scale=1e9, scale2=1e-9)
+    return nbt_to_nbt_execute_store(src, dst, scale=1)
 
 
 def nbt_to_nbt_execute_store(src: NbtStore[CompoundType | ListType | StringType | NumberType],
@@ -124,7 +131,7 @@ def nbt_to_nbt_execute_store(src: NbtStore[CompoundType | ListType | StringType 
                              scale: float | None = 1,
                              scale2: float = 1) -> String:
     assert dst.dtype is not None
-    assert scale is None or scale <= 2147483647
+    # assert scale is None or scale <= 2147483647
 
     return LiteralString(
         f"execute store result {dst.nbt_container_type} %s %s {dst.dtype} {float_to_decimal(scale2)} "
@@ -243,7 +250,7 @@ def add_const(dst: WritableStore[NumberType], increment: ConstStore[NumberType])
         if not dst.is_data_type(NumberType, DataType):
             raise CompilationError(f"Cannot add {increment!r} to non-NumberType {dst!r}.")
 
-        if dst.is_data_type(DoubleType, FloatType):
+        if dst.is_data_type(DoubleType, FloatType, LongType):
             temp_tag = UniqueTag(LiteralString("add_const_to_double_temp"))
             temp_sel = LiteralString("@e[tag=%s, limit=1]", temp_tag)
 
@@ -263,7 +270,7 @@ def add_const(dst: WritableStore[NumberType], increment: ConstStore[NumberType])
                 # 5. kill
                 LiteralString("kill @e[tag=%s]", temp_tag)
             ]
-        elif dst.is_data_type(WholeNumberType):
+        elif dst.is_data_type(IntType):
             temp_var = ScoreboardStore("add_const_to_nbt", STD_TEMP_OBJECTIVE)
             return [
                 *var_to_var(dst, temp_var),
